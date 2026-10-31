@@ -1,0 +1,338 @@
+<title>tutor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: an engineering computation pad. Graph-paper ground, one live plot as the hero, then a narrow reading column with wide code rows. */
+:root {
+  --paper: #eef2e8;
+  --grid: #d6dfcc;
+  --ink: #1b2822;
+  --muted: #5b6a61;
+  --panel: #f8faf4;
+  --rule: #c3cfb8;
+  --signal: #2350c4;      /* the response curve; also links and the primary accent */
+  --setpoint: #b2452b;    /* the reference line, used only in the plot and stage markers */
+  --code-bg: #1d2a24;
+  --code-ink: #e3ebdf;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e;
+    --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --code-bg: #0c120f; --code-ink: #dce6d8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e;
+  --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --code-bg: #0c120f; --code-ink: #dce6d8;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font: 16px/1.65 var(--body);
+}
+.page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 80px;
+  display: grid;
+  gap: 72px;
+}
+h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.05; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(30px, 4vw, 40px); }
+h3 { font-size: 22px; font-weight: 500; }
+p { margin: 0; }
+a { color: var(--signal); }
+code { font-family: var(--mono); font-size: .88em; }
+p code, li code, td code { background: var(--panel); border: 1px solid var(--rule); padding: 0 5px; border-radius: 3px; }
+.label { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.prose { max-width: 64ch; display: grid; gap: 14px; }
+section { display: grid; gap: 24px; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 40px; align-items: center; }
+.hero h1 { font-size: clamp(64px, 11vw, 120px); letter-spacing: -.01em; }
+.hero .lede { font-size: 19px; max-width: 40ch; }
+.hero-text { display: grid; gap: 20px; min-width: 0; }
+.tagline { font-family: var(--display); font-size: 26px; font-weight: 500; color: var(--signal); }
+
+.scope { background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 18px; display: grid; gap: 14px; min-width: 0; }
+.scope-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.iae { font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
+.iae strong { color: var(--signal); }
+.scope svg { width: 100%; height: auto; display: block; }
+.scope svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.knobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.knob { display: grid; gap: 2px; }
+.knob label { font-family: var(--mono); font-size: 13px; display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.knob input { width: 100%; accent-color: var(--signal); }
+.caption { font-size: 13px; color: var(--muted); }
+
+/* Loop */
+.loop { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); }
+.loop div { padding: 16px; display: grid; gap: 6px; align-content: start; border-right: 1px solid var(--rule); min-width: 0; }
+.loop div:last-child { border-right: 0; }
+.loop .who { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.loop .judge { box-shadow: inset 0 -3px 0 var(--signal); }
+.principle { font-family: var(--display); font-size: 28px; font-weight: 500; }
+.principle span { color: var(--signal); }
+
+/* Stages */
+.stages { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 40px; counter-reset: stage; }
+.stages li { counter-increment: stage; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 4px 12px; padding: 14px 0; border-top: 1px solid var(--rule); }
+.stages li::before { content: counter(stage, decimal-leading-zero); font-family: var(--mono); font-size: 13px; color: var(--setpoint); padding-top: 4px; grid-row: span 2; }
+.stages strong { font-family: var(--display); font-size: 21px; font-weight: 500; line-height: 1.2; }
+.stages span { font-size: 14px; color: var(--muted); }
+
+/* Steps + code */
+.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 28px; counter-reset: step; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; }
+.steps > li::before { content: counter(step); font-family: var(--display); font-size: 30px; font-weight: 700; color: var(--signal); line-height: 1; }
+.steps .body { display: grid; gap: 10px; min-width: 0; }
+.cmd { display: flex; align-items: stretch; background: var(--code-bg); color: var(--code-ink); border-radius: 4px; min-width: 0; }
+.cmd pre { margin: 0; padding: 12px 14px; overflow-x: auto; flex: 1; font: 14px/1.5 var(--mono); }
+.cmd button { font: 12px var(--mono); background: none; color: var(--code-ink); border: 0; border-left: 1px solid #ffffff22; padding: 0 14px; cursor: pointer; opacity: .75; }
+.cmd button:hover { opacity: 1; }
+button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+.note { font-size: 14px; color: var(--muted); }
+
+/* Reference */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td:first-child { white-space: nowrap; }
+td code { background: none; border: 0; padding: 0; }
+
+footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 20px; }
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: minmax(0, 1fr); }
+  .loop { grid-template-columns: minmax(0, 1fr); }
+  .loop div { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .loop div:last-child { border-bottom: 0; }
+  .stages { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .knobs { grid-template-columns: minmax(0, 1fr); }
+  .steps > li { grid-template-columns: 28px minmax(0, 1fr); }
+}
+</style>
+
+<div class="page">
+  <header class="hero">
+    <div class="hero-text">
+      <span class="label">A local, codecrafters-style tutor</span>
+      <h1>tutor</h1>
+      <p class="tagline">Build real things, one tested stage at a time.</p>
+      <p class="lede">Pick something to build. Claude Code turns it into a course of small stages with black-box tests. Every commit is compiled and graded. A local model reviews your diff, and Claude Code steps in only when you're stuck.</p>
+    </div>
+
+    <figure class="scope" aria-labelledby="scope-cap" style="margin:0">
+      <div class="scope-head">
+        <span class="label">Step response · first-order plant, τ = 0.5 s</span>
+        <span class="iae">IAE <strong id="iae">0.000</strong></span>
+      </div>
+      <svg id="plot" viewBox="0 0 600 260" role="img" aria-label="Plant output following a setpoint step under PID control"></svg>
+      <div class="knobs">
+        <div class="knob"><label for="kp">kp <output id="kp-v"></output></label><input id="kp" type="range" min="0" max="8" step="0.1" value="2.4"></div>
+        <div class="knob"><label for="ki">ki <output id="ki-v"></output></label><input id="ki" type="range" min="0" max="12" step="0.1" value="4"></div>
+        <div class="knob"><label for="kd">kd <output id="kd-v"></output></label><input id="kd" type="range" min="0" max="0.5" step="0.01" value="0.05"></div>
+      </div>
+      <figcaption class="caption" id="scope-cap">This is where the PID course ends up: your controller closing the loop on a simulated plant (stage 7), scored by integral of absolute error (stage 8). Drag the gains. Output is clamped to 0–3, with anti-windup.</figcaption>
+    </figure>
+  </header>
+
+  <section aria-labelledby="how">
+    <span class="label">How it works</span>
+    <h2 id="how">Every commit runs the same loop</h2>
+    <div class="loop">
+      <div><span class="who">you</span><h3>Commit</h3><p class="note">A git hook runs <code>tutor test</code>. The web page's Run tests button does the same.</p></div>
+      <div><span class="who">gcc</span><h3>Build</h3><p class="note">Your build command runs first. Compiler errors are reported like failed tests.</p></div>
+      <div class="judge"><span class="who">tests</span><h3>Grade</h3><p class="note">Fixed stdin, exact stdout. Earlier stages re-run so nothing regresses.</p></div>
+      <div><span class="who">local LLM · Ollama</span><h3>Review</h3><p class="note">A small model on your own machine reads your diff and gives up to three short notes.</p></div>
+      <div><span class="who">Claude Code</span><h3>Escalate</h3><p class="note">After 3 failed runs on one stage, it reads your code and explains what's missing, without writing the fix.</p></div>
+    </div>
+    <p class="principle">Tests decide whether you pass. <span>Models only teach.</span></p>
+  </section>
+
+  <section aria-labelledby="course">
+    <span class="label">The PID course · 8 stages · C</span>
+    <h2 id="course">Build your own PID controller</h2>
+    <div class="prose">
+      <p>Your program reads a config line like <code>kp=2.5 ki=1 dt=0.1</code> from stdin, then one <code>&lt;setpoint&gt; &lt;measurement&gt;</code> per line, and prints the control output to 4 decimal places. Each stage adds one idea to the same controller.</p>
+    </div>
+    <ol class="stages">
+      <li><strong>Proportional control</strong><span>Parse the config and push in proportion to the error.</span></li>
+      <li><strong>Integral term and the fixed timestep</strong><span>Keep state between steps and accumulate error × dt.</span></li>
+      <li><strong>Derivative term</strong><span>React to how fast the error is changing.</span></li>
+      <li><strong>Output clamping</strong><span>Respect the actuator's <code>min</code> and <code>max</code>.</span></li>
+      <li><strong>Integral anti-windup</strong><span>Stop the integral growing while the output is saturated.</span></li>
+      <li><strong>No derivative kick</strong><span>Take the derivative of the measurement so setpoint jumps don't spike the output.</span></li>
+      <li><strong>Closing the loop</strong><span><code>--sim</code>: drive a first-order plant and print its trajectory.</span></li>
+      <li><strong>Tuning</strong><span><code>--tune</code>: score candidate gains by IAE and pick the best.</span></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="run">
+    <span class="label">Run the course</span>
+    <h2 id="run">From zero to stage 1</h2>
+    <div class="prose"><p>You need Rust (<code>cargo</code>), <code>gcc</code>, <code>git</code> and a logged-in <a href="https://claude.com/claude-code">Claude Code</a>. The local reviewer is optional. If <a href="https://ollama.com">Ollama</a> isn't reachable, tutor skips the review and carries on.</p></div>
+    <ol class="steps">
+      <li><div class="body">
+        <h3>Get tutor</h3>
+        <div class="cmd"><pre>git clone https://github.com/Supragy352/tutor &amp;&amp; cargo install --path tutor</pre><button type="button">Copy</button></div>
+        <p class="note">This puts <code>tutor</code> on your PATH. Keep the clone: the courses live in its <code>challenges/</code> folder.</p>
+      </div></li>
+      <li><div class="body">
+        <h3>Start a workspace</h3>
+        <div class="cmd"><pre>git init pid &amp;&amp; cd pid
+tutor init ../tutor/challenges/pid --build "gcc -O2 -Wall -o pid main.c -lm" ./pid</pre><button type="button">Copy</button></div>
+        <p class="note">This installs the commit hook and keeps your progress in <code>tutor.toml</code>. On Windows, name the binary <code>pid.exe</code>.</p>
+      </div></li>
+      <li><div class="body">
+        <h3>Open the dashboard</h3>
+        <div class="cmd"><pre>tutor serve</pre><button type="button">Copy</button></div>
+        <p class="note">Then visit <code>http://localhost:4242</code> for the stage instructions, your progress, test results, reviewer notes and hints. It updates when you commit from a terminal. <code>tutor show</code> prints the current stage if you'd rather stay in the terminal.</p>
+      </div></li>
+      <li><div class="body">
+        <h3>Write code, commit</h3>
+        <div class="cmd"><pre>git commit -am "stage 1: proportional"</pre><button type="button">Copy</button></div>
+        <p class="note">The hook compiles <code>main.c</code>, runs every test up to your stage, and asks the reviewer. Pass and you unlock the next stage. Fail and you see the stdin, expected and actual output for each failing case.</p>
+      </div></li>
+      <li><div class="body">
+        <h3>Stuck? Ask</h3>
+        <div class="cmd"><pre>tutor hint</pre><button type="button">Copy</button></div>
+        <p class="note">Claude Code reads your folder and explains the concept you're missing. It also steps in on its own after 3 failed runs on the same stage.</p>
+      </div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="ref">
+    <span class="label">Reference</span>
+    <h2 id="ref">Commands</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>tutor init &lt;course&gt; [--build "cmd"] &lt;run&gt;</code></td><td>Start a course in the current folder and install the git hook.</td></tr>
+          <tr><td><code>tutor test</code></td><td>Build, run the tests and the review. Advances on pass.</td></tr>
+          <tr><td><code>tutor serve [port]</code></td><td>Web dashboard on localhost (default port 4242).</td></tr>
+          <tr><td><code>tutor show</code></td><td>Print the current stage's instructions.</td></tr>
+          <tr><td><code>tutor hint</code></td><td>Ask Claude Code for help on the current stage.</td></tr>
+          <tr><td><code>tutor new &lt;slug&gt; "&lt;goal&gt;"</code></td><td>Have Claude Code design a new course into <code>challenges/&lt;slug&gt;</code>.</td></tr>
+          <tr><td><code>tutor verify &lt;course&gt;</code></td><td>Check a course's tests against its hidden reference solution.</td></tr>
+          <tr><td><code>TUTOR_LLM</code>, <code>TUTOR_MODEL</code></td><td>Ollama address (default <code>http://localhost:11434</code>, or <code>off</code>) and model (default <code>qwen3.6:35b</code>).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="own">
+    <span class="label">Learn anything</span>
+    <h2 id="own">Make your own course</h2>
+    <div class="prose">
+      <p>Describe what you want to build. Claude Code breaks it into 5–8 stages, writes the tests, and writes a hidden reference solution. tutor only accepts the course once that solution passes every test, so you never end up chasing a broken test. If it fails, the failures go back to Claude Code, up to three attempts.</p>
+    </div>
+    <div class="cmd"><pre>tutor new lisp "Build a Lisp interpreter with a REPL: tokenizer, parser, eval, lambdas and closures"</pre><button type="button">Copy</button></div>
+  </section>
+
+  <footer>tutor runs entirely on your machine and your tailnet. Courses are plain TOML in <code>challenges/</code>.</footer>
+</div>
+
+<script>
+// Same discrete PID as the course: integral += e*dt, derivative on measurement, clamped output with anti-windup.
+function simulate(kp, ki, kd) {
+  const dt = 0.02, steps = 250, tau = 0.5, gain = 1, sp = 1, lo = 0, hi = 3;
+  let y = 0, integral = 0, prev = 0, iae = 0;
+  const ys = [y];
+  for (let i = 0; i < steps; i++) {
+    const e = sp - y;
+    iae += Math.abs(e) * dt;
+    const next = integral + e * dt;
+    const d = i === 0 ? 0 : -(y - prev) / dt;
+    let u = kp * e + ki * next + kd * d;
+    if (u > hi || u < lo) u = Math.min(hi, Math.max(lo, u)); // saturated: keep the old integral
+    else integral = next;
+    prev = y;
+    y += dt * (gain * u - y) / tau;
+    ys.push(y);
+  }
+  return { ys, iae, t: steps * dt };
+}
+
+const svg = document.getElementById("plot"), NS = "http://www.w3.org/2000/svg";
+const W = 600, H = 260, L = 34, R = 10, T = 12, B = 26, YMAX = 1.6;
+const sx = (i, n) => L + (i / n) * (W - L - R);
+const sy = v => T + (1 - Math.min(Math.max(v, 0), YMAX) / YMAX) * (H - T - B);
+
+function el(name, attrs, text) {
+  const n = document.createElementNS(NS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function draw() {
+  const kp = +document.getElementById("kp").value, ki = +document.getElementById("ki").value, kd = +document.getElementById("kd").value;
+  document.getElementById("kp-v").textContent = kp.toFixed(1);
+  document.getElementById("ki-v").textContent = ki.toFixed(1);
+  document.getElementById("kd-v").textContent = kd.toFixed(2);
+  const { ys, iae, t } = simulate(kp, ki, kd);
+  document.getElementById("iae").textContent = iae.toFixed(3);
+
+  const css = getComputedStyle(document.documentElement);
+  const grid = css.getPropertyValue("--rule"), signal = css.getPropertyValue("--signal"), sp = css.getPropertyValue("--setpoint");
+  svg.replaceChildren();
+  for (const v of [0, 0.5, 1, 1.5]) {
+    svg.append(el("line", { x1: L, x2: W - R, y1: sy(v), y2: sy(v), stroke: grid, "stroke-width": 1 }));
+    svg.append(el("text", { x: L - 6, y: sy(v) + 4, "text-anchor": "end" }, v.toFixed(1)));
+  }
+  for (const s of [0, 1, 2, 3, 4, 5]) {
+    const x = L + (s / t) * (W - L - R);
+    svg.append(el("text", { x, y: H - 8, "text-anchor": "middle" }, s + "s"));
+  }
+  svg.append(el("line", { x1: L, x2: W - R, y1: sy(1), y2: sy(1), stroke: sp, "stroke-width": 1.5, "stroke-dasharray": "6 5" }));
+  svg.append(el("text", { x: W - R, y: sy(1) - 6, "text-anchor": "end", fill: sp }, "setpoint"));
+  const d = ys.map((v, i) => (i ? "L" : "M") + sx(i, ys.length - 1).toFixed(1) + " " + sy(v).toFixed(1)).join("");
+  svg.append(el("path", { d, fill: "none", stroke: signal, "stroke-width": 2.5, "stroke-linejoin": "round" }));
+}
+
+for (const id of ["kp", "ki", "kd"]) document.getElementById(id).addEventListener("input", draw);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+draw();
+
+for (const b of document.querySelectorAll(".cmd button")) {
+  b.addEventListener("click", async () => {
+    const pre = b.previousElementSibling;
+    try {
+      await navigator.clipboard.writeText(pre.textContent);
+      b.textContent = "Copied";
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      b.textContent = "Selected";
+    }
+    setTimeout(() => (b.textContent = "Copy"), 1500);
+  });
+}
+</script>

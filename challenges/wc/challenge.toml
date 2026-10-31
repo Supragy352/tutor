@@ -1,0 +1,34 @@
+title = "Build your own wc"
+reference = "python reference/main.py"
+
+[[stages]]
+name = "Count lines"
+instructions = """
+Write a program that reads all of stdin and prints the number of lines.
+A line is anything ending in a newline character.
+"""
+tests = [
+  { stdin = "a\nb\nc\n", expect = "3" },
+  { stdin = "", expect = "0" },
+]
+
+[[stages]]
+name = "Count words"
+instructions = """
+When called with `-w`, print the number of words instead.
+Words are separated by any whitespace.
+"""
+tests = [
+  { args = ["-w"], stdin = "hello world\nfoo\n", expect = "3" },
+  { args = ["-w"], stdin = "  spaced   out  \n", expect = "2" },
+]
+
+[[stages]]
+name = "Count bytes"
+instructions = """
+When called with `-c`, print the number of bytes.
+"""
+tests = [
+  { args = ["-c"], stdin = "abc\n", expect = "4" },
+  { args = ["-c"], stdin = "", expect = "0" },
+]

@@ -1,0 +1,15 @@
+[package]
+name = "tutor"
+version = "0.1.0"
+edition = "2021"
+description = "A codecrafters-style coding tutor: test-driven stages, a local LLM reviewer, and Claude Code when you're stuck"
+license = "MIT"
+repository = "https://github.com/Supragy352/tutor"
+readme = "README.md"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+serde_json = "1"
+# plain http is enough: Ollama runs locally or on a private network
+ureq = { version = "2", default-features = false, features = ["json"] }

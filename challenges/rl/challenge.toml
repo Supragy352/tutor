@@ -1,0 +1,716 @@
+title = "Reinforcement learning from scratch"
+reference = "python reference/main.py"
+
+[[stages]]
+name = "Seeded randomness"
+instructions = '''
+Reinforcement learning is a loop. An **agent** looks at an **observation** from an **environment**,
+picks an **action**, and gets back a **reward** and the next observation. Over many such steps it
+learns which actions lead to more reward. Every part of that loop uses randomness: where episodes
+start, which actions get tried, how network weights start out, and which memories get replayed. The
+hyperparameter-tuning notebook in Shawn Hymel's repo starts with a `set_random_seeds` helper for a
+good reason: without fixed seeds you can't reproduce a result or compare two runs fairly.
+
+In this course you build every piece yourself, in Python, and the tests compare your output exactly.
+So you also build the random number generator, and everyone gets the same stream from the same seed.
+Use **splitmix64**. All arithmetic is on unsigned 64-bit integers, so wrap modulo 2^64 after every
+add and multiply:
+
+```
+state = state + 0x9E3779B97F4A7C15
+z = state
+z = (z xor (z >> 30)) * 0xBF58476D1CE4E5B9
+z = (z xor (z >> 27)) * 0x94D049BB133111EB
+output z xor (z >> 31)
+```
+
+The seed is the initial `state`. From each 64-bit output, build:
+
+- `uniform()`: `(output >> 11) / 2^53`, a float in [0, 1). `uniform(lo, hi)` is `lo + (hi - lo) * uniform()`.
+- `randint(n)`: `floor(uniform() * n)`, an integer in [0, n).
+
+Your program is `rl.py`, and each stage adds a sub-command. This stage's command is
+`rl.py rng SEED N [K]`. Draw N numbers from a generator seeded with SEED and print them on one line,
+separated by single spaces. Without K, print `uniform()` values. With K, print `randint(K)` values.
+
+**Formatting for the whole course:** unless a stage says otherwise, every float you print has exactly
+4 decimal places, and a value that would print as `-0.0000` prints as `0.0000`. You can use numpy
+from stage 11 onwards; nothing else outside the standard library is needed.
+'''
+tests = [
+  { args = ["rng", "42", "5"], expect = "0.7416 0.1599 0.2786 0.3442 0.0380" },
+  { args = ["rng", "0", "3"], expect = "0.8833 0.4315 0.0264" },
+  { args = ["rng", "12345", "8", "6"], expect = "0 1 0 1 3 2 0 2" },
+  { args = ["rng", "18446744073709551615", "4", "2"], expect = "1 1 0 0" },
+]
+
+[[stages]]
+name = "CartPole physics"
+instructions = '''
+The repo's first notebook calls `gym.make('CartPole-v1')`, which is a cart on a rail with a pole
+hinged on top. You're going to write that environment yourself, matching gymnasium exactly. The state
+is four numbers: cart position `x`, cart velocity `x_dot`, pole angle `theta` (radians, 0 = upright),
+and pole angular velocity `theta_dot`. There are two actions. Action 0 pushes the cart left with
+force -10 N, and action 1 pushes it right with +10 N. There is no "do nothing" action.
+
+The constants are gravity 9.8, cart mass 1.0, pole mass 0.1, pole half-length 0.5, and timestep
+`tau` 0.02 s. Then `total_mass = 1.1` and `polemass_length = pole_mass * half_length`. One step is:
+
+```
+temp      = (force + polemass_length * theta_dot^2 * sin(theta)) / total_mass
+theta_acc = (gravity * sin(theta) - cos(theta) * temp)
+            / (half_length * (4/3 - pole_mass * cos(theta)^2 / total_mass))
+x_acc     = temp - polemass_length * theta_acc * cos(theta) / total_mass
+x         = x + tau * x_dot           # explicit Euler: update positions with the *old* velocities
+x_dot     = x_dot + tau * x_acc
+theta     = theta + tau * theta_dot
+theta_dot = theta_dot + tau * theta_acc
+```
+
+Every step gives reward 1.0, including the step that ends the episode. The episode is **terminated**
+when `|x| > 2.4` or `|theta| > 12°` (that is, `12 * 2π / 360` radians).
+
+Command: `rl.py cartpole`. The first stdin line is the starting state, `x x_dot theta theta_dot`.
+Each following line is an action (0 or 1). After each step, print
+`x x_dot theta theta_dot reward terminated`, with `terminated` written as `true` or `false`. Once an
+episode terminates, stop. Any remaining actions are ignored.
+
+Write the environment as an object with `reset` and `step` methods, the same shape as gymnasium's
+API. You'll add `reset` in stage 4.
+'''
+tests = [
+  { args = ["cartpole"], stdin = "0.01 0.02 0.03 0.04\n1\n1\n0\n1\n", expect = "0.0104 0.2147 0.0308 -0.2431 1.0000 false\n0.0147 0.4093 0.0259 -0.5259 1.0000 false\n0.0229 0.2139 0.0154 -0.2251 1.0000 false\n0.0272 0.4088 0.0109 -0.5129 1.0000 false" },
+  { args = ["cartpole"], stdin = "0 0 0.2 0.5\n1\n1\n1\n0\n0\n", expect = "0.0000 0.1918 0.2100 0.2764 1.0000 true" },
+  { args = ["cartpole"], stdin = "2.39 1 0 0\n1\n1\n1\n", expect = "2.4100 1.1951 0.0000 -0.2927 1.0000 true" },
+  { args = ["cartpole"], stdin = "-0.03 -0.4 -0.05 0.6\n0\n0\n0\n0\n0\n0\n", expect = "-0.0380 -0.5944 -0.0380 0.8765 1.0000 false\n-0.0499 -0.7890 -0.0205 1.1570 1.0000 false\n-0.0657 -0.9838 0.0027 1.4432 1.0000 false\n-0.0853 -1.1790 0.0315 1.7367 1.0000 false\n-0.1089 -1.3744 0.0663 2.0391 1.0000 false\n-0.1364 -1.5702 0.1071 2.3515 1.0000 false" },
+]
+
+[[stages]]
+name = "Pendulum physics"
+instructions = '''
+The second notebook switches to `Pendulum-v1`, which has a **continuous** action. Instead of picking
+left or right, the agent chooses a torque anywhere in [-2, 2] N·m, and the goal is to swing the
+pendulum up and hold it upright. The state is `theta` (0 = upright) and `theta_dot`. The agent
+doesn't observe `theta` directly. It observes `[cos(theta), sin(theta), theta_dot]`, because the
+angle wraps around and cos/sin don't jump at ±π.
+
+The constants are g = 10, m = 1, l = 1, dt = 0.05, max speed 8, and max torque 2. One step with
+torque `u`:
+
+1. Clip `u` to [-2, 2].
+2. The reward is `-(normalize(theta)^2 + 0.1 * theta_dot^2 + 0.001 * u^2)`, computed from the
+   state **before** the step. `normalize(a) = ((a + π) mod 2π) - π`, using floored modulo (the
+   result is always in [0, 2π) before subtracting π, which is what Python's `%` gives you).
+3. `theta_dot = theta_dot + (3g/(2l) * sin(theta) + 3/(m l²) * u) * dt`, then clip it to [-8, 8].
+4. `theta = theta + theta_dot * dt`, using the **new** `theta_dot` (semi-implicit Euler, unlike
+   CartPole).
+
+Pendulum never terminates. It is cut off by a time limit instead, which you'll add in the next stage.
+
+Command: `rl.py pendulum`. The first stdin line is `theta theta_dot`. Each following line is a torque.
+After each step, print `cos(theta) sin(theta) theta_dot reward` for the new state and that step's
+reward.
+
+The best possible reward is 0 (upright, still, no torque). The worst is about -16.27 (hanging down,
+spinning at full speed, full torque), the range quoted at the top of the repo's pendulum notebook.
+'''
+tests = [
+  { args = ["pendulum"], stdin = "0 0\n0\n0\n", expect = "1.0000 0.0000 0.0000 0.0000\n1.0000 0.0000 0.0000 0.0000" },
+  { args = ["pendulum"], stdin = "3.14159 0\n2\n2\n-2\n", expect = "-0.9999 -0.0150 0.3000 -9.8736\n-0.9990 -0.0444 0.5888 -9.7886\n-0.9984 -0.0572 0.2554 -9.6310" },
+  { args = ["pendulum"], stdin = "1 7.9\n5\n5\n-9\n", expect = "0.1700 0.9854 8.0000 -7.2450\n-0.2272 0.9738 8.0000 -8.3640\n-0.5885 0.8085 8.0000 -9.6440" },
+  { args = ["pendulum"], stdin = "4 -0.5\n0\n0.75\n", expect = "-0.6931 -0.7208 -1.0676 -5.2379\n-0.7450 -0.6670 -1.4957 -5.5741" },
+]
+
+[[stages]]
+name = "Episodes and a random agent"
+instructions = '''
+Before training anything, the notebooks run a `DummyModel` that ignores the observation and samples
+a random action. That baseline tells you what "no learning" looks like. You'll build the same thing:
+`reset`, the episode loop from the notebook's `test_model`, and a random policy.
+
+`reset(rng)` draws the starting state from the generator, in this order:
+
+- **CartPole:** four values, each `uniform(-0.05, 0.05)`, for x, x_dot, theta, theta_dot.
+- **Pendulum:** `theta = uniform(-π, π)`, then `theta_dot = uniform(-1, 1)`.
+
+An **episode** starts with a reset and runs until it is terminated or reaches the time limit. The
+time limit is 500 steps for CartPole and 200 for Pendulum. Hitting the limit is called
+**truncation**, and that difference matters in stage 15. The random policy draws one value per step,
+just before stepping: CartPole uses `randint(2)`, and Pendulum uses `uniform(-2, 2)`.
+
+Command: `rl.py random-agent ENV SEED EPISODES`, where ENV is `cartpole` or `pendulum`. Create
+**one** generator seeded with SEED and use it for everything, in order: reset, then one action draw
+per step, then the next episode's reset, and so on. For each episode print
+`Episode <i> | length: <steps>, reward: <total reward>`, with `i` counted from 0 and the length as an
+integer. Then print `Average | length: <mean length>, reward: <mean reward>`.
+
+This is the same printout as the notebook. Random CartPole lasts about 20 steps, and random Pendulum
+scores about -1200 per episode. Those are the numbers to beat.
+'''
+tests = [
+  { args = ["random-agent", "cartpole", "0", "3"], expect = "Episode 0 | length: 27, reward: 27.0000\nEpisode 1 | length: 12, reward: 12.0000\nEpisode 2 | length: 18, reward: 18.0000\nAverage | length: 19.0000, reward: 19.0000" },
+  { args = ["random-agent", "cartpole", "7", "5"], expect = "Episode 0 | length: 8, reward: 8.0000\nEpisode 1 | length: 47, reward: 47.0000\nEpisode 2 | length: 16, reward: 16.0000\nEpisode 3 | length: 22, reward: 22.0000\nEpisode 4 | length: 13, reward: 13.0000\nAverage | length: 21.2000, reward: 21.2000" },
+  { args = ["random-agent", "pendulum", "1", "2"], expect = "Episode 0 | length: 200, reward: -969.2309\nEpisode 1 | length: 200, reward: -879.9135\nAverage | length: 200.0000, reward: -924.5722" },
+]
+
+[[stages]]
+name = "Discounted returns"
+instructions = '''
+An agent shouldn't just grab the biggest reward right now. It should maximise the **return**, the sum
+of all future rewards. Future rewards are discounted by a factor `gamma` per step:
+`G_t = r_t + gamma * r_{t+1} + gamma^2 * r_{t+2} + ...`. This keeps infinite sums finite and makes
+the agent prefer reward sooner rather than later. The notebooks use `gamma=0.99` for CartPole and
+`gamma=0.9` for Pendulum. A smaller gamma means a shorter horizon, which is fine when the payoff
+comes fast.
+
+The trick that everything later relies on is the recursion `G_t = r_t + gamma * G_{t+1}`. Sweep
+backwards from the end of the episode once, instead of summing a series for every step.
+
+Command: `rl.py returns GAMMA`. Each stdin line is one episode's rewards. For each line, print the
+return at every step, on one line.
+'''
+tests = [
+  { args = ["returns", "0.99"], stdin = "1 1 1 1\n", expect = "3.9404 2.9701 1.9900 1.0000" },
+  { args = ["returns", "0.9"], stdin = "0 0 0 -1\n1 2 3\n", expect = "-0.7290 -0.8100 -0.9000 -1.0000\n5.2300 4.7000 3.0000" },
+  { args = ["returns", "0"], stdin = "5 -2 7\n", expect = "5.0000 -2.0000 7.0000" },
+  { args = ["returns", "1"], stdin = "0.5 -1.5 2 0.25\n", expect = "1.2500 0.7500 2.2500 0.2500" },
+]
+
+[[stages]]
+name = "Exploration schedules"
+instructions = '''
+An agent that always takes the action it currently thinks is best never finds out whether something
+else is better. That's the **exploration vs exploitation** trade-off. The classic answer is
+epsilon-greedy: with probability epsilon take a random action, and otherwise take the best one.
+Start with a lot of exploration (epsilon near 1) and decay it as the agent learns. Stable Baselines3's
+DQN, which the CartPole notebook uses, decays epsilon linearly from `exploration_initial_eps` to
+`exploration_final_eps` over the first `exploration_fraction` of training, then holds it there.
+
+At timestep `t` out of `TOTAL`:
+`epsilon(t) = START + (END - START) * min(1, t / (FRACTION * TOTAL))`.
+
+Command: `rl.py schedule START END FRACTION TOTAL`. Each stdin line holds a timestep. Print epsilon
+at every timestep, on one line.
+'''
+tests = [
+  { args = ["schedule", "1.0", "0.05", "0.1", "10000"], stdin = "0\n500\n1000\n5000\n", expect = "1.0000 0.5250 0.0500 0.0500" },
+  { args = ["schedule", "0.5", "0.1", "0.5", "200"], stdin = "0\n50\n99\n100\n150\n", expect = "0.5000 0.3000 0.1040 0.1000 0.1000" },
+  { args = ["schedule", "0.2", "0.2", "0.3", "1000"], stdin = "0\n700\n", expect = "0.2000 0.2000" },
+]
+
+[[stages]]
+name = "Epsilon-greedy actions"
+instructions = '''
+Now use epsilon to choose actions. Given the agent's value estimates for every action, an
+epsilon-greedy choice draws exactly as follows:
+
+1. Draw `u = uniform()`.
+2. If `u < epsilon`, return `randint(number_of_actions)`. That is a second draw.
+3. Otherwise, return the index of the largest value. On a tie, return the **lowest** tied index.
+
+Drawing in exactly this order is what keeps your agent's run reproducible.
+
+Command: `rl.py egreedy EPSILON SEED`. Each stdin line is a list of action values. Use one generator
+for all the lines, and print the chosen action for every line, on one line.
+'''
+tests = [
+  { args = ["egreedy", "0", "1"], stdin = "1 2 3\n3 3 1\n-1 -5\n", expect = "2 0 0" },
+  { args = ["egreedy", "1", "5"], stdin = "0 0 0\n9 1\n1 2 3 4\n0 0\n", expect = "2 0 1 1" },
+  { args = ["egreedy", "0.3", "9"], stdin = "0.1 0.5\n0.5 0.1\n0.2 0.2 0.9\n7 3\n1 1 1 1\n4 5\n", expect = "1 0 2 0 0 1" },
+]
+
+[[stages]]
+name = "Turning observations into states"
+instructions = '''
+The simplest learner keeps a **table** with one value per state and action. CartPole's state is
+continuous, though, so first chop each dimension into bins and number the resulting boxes. This is
+tile coding at its crudest, and it's where most people start before reaching for neural networks.
+
+Use these ranges: x in [-2.4, 2.4], x_dot in [-3, 3], theta in [-0.21, 0.21], and theta_dot in
+[-3.5, 3.5]. For a value `v` in a range `[lo, hi]` split into `n` bins, the bin is
+`floor((v - lo) / (hi - lo) * n)`, clamped to [0, n-1], so values outside the range land in the edge
+bins. Combine the four bins into one index in mixed radix, with the first dimension most significant:
+`((b0 * n1 + b1) * n2 + b2) * n3 + b3`.
+
+Command: `rl.py discretize N0 N1 N2 N3`. Each stdin line is an observation. Print each observation's
+state index, on one line.
+
+Using one bin for a dimension ignores it. `1 1 6 12` (pole angle and spin only) is enough to solve
+CartPole, as you'll see in stage 10.
+'''
+tests = [
+  { args = ["discretize", "1", "1", "6", "12"], stdin = "0 0 0 0\n0 0 0.21 3.5\n0 0 -1 -10\n0.5 -0.2 0.05 -0.4\n", expect = "42 71 0 41" },
+  { args = ["discretize", "3", "3", "6", "6"], stdin = "-2.4 3 0.1 0\n1.7 -0.5 -0.03 2.2\n", expect = "99 268" },
+  { args = ["discretize", "2", "2", "2", "2"], stdin = "0 0 0 0\n-0.1 -0.1 -0.1 -0.1\n", expect = "15 0" },
+]
+
+[[stages]]
+name = "The Q-learning update"
+instructions = '''
+`Q(s, a)` estimates the return from taking action `a` in state `s` and acting well afterwards. The
+Bellman equation says a good estimate should satisfy `Q(s, a) = r + gamma * max_a' Q(s', a')`. That
+is, the reward now plus the discounted value of the best move from the next state. Q-learning nudges
+`Q(s, a)` toward that target after every transition:
+
+```
+target   = r                               if the episode terminated at s'
+target   = r + gamma * max_a' Q(s', a')    otherwise
+td_error = target - Q(s, a)
+Q(s, a)  = Q(s, a) + alpha * td_error
+```
+
+`alpha` is the learning rate. When `s'` is terminal there is no future to bootstrap from, so the
+target is just the reward.
+
+Command: `rl.py qupdate ALPHA GAMMA NUM_STATES NUM_ACTIONS`. Start with a table of zeros. Each stdin
+line is a transition `s a r s' terminated`, with `terminated` as 0 or 1. Apply the updates in order.
+Print every transition's TD error on one line, then the final table, one state per line.
+'''
+tests = [
+  { args = ["qupdate", "0.5", "0.9", "3", "2"], stdin = "0 1 1 1 0\n1 0 2 2 1\n0 1 1 1 0\n1 1 -1 0 0\n0 0 0 2 0\n", expect = "1.0000 2.0000 1.4000 0.0800 0.0000\n0.0000 1.2000\n1.0000 0.0400\n0.0000 0.0000" },
+  { args = ["qupdate", "1", "0.99", "2", "2"], stdin = "0 0 1 1 0\n1 1 5 0 0\n0 0 1 1 0\n", expect = "1.0000 5.9900 5.9301\n6.9301 0.0000\n0.0000 5.9900" },
+  { args = ["qupdate", "0.1", "0.5", "1", "3"], stdin = "0 2 3 0 1\n0 2 3 0 1\n0 0 1 0 0\n", expect = "3.0000 2.7000 1.2850\n0.1285 0.0000 0.5700" },
+]
+
+[[stages]]
+name = "Tabular Q-learning solves CartPole"
+instructions = '''
+Put the pieces together into an agent that learns from scratch. CartPole-v1 counts as solved when
+the agent averages 475 or more over its episodes. From here on, a stage's test checks **outcomes**,
+not exact numbers: training runs for thousands of steps, and tiny differences in floating-point
+order would make exact traces brittle. So only the final verdict goes to stdout. Print progress
+(evaluation scores and so on) to **stderr**, where it doesn't affect the tests but you can watch it.
+
+Command: `rl.py qlearn SEED`. Train a tabular Q-learning agent on your CartPole and print `solved` as
+soon as a greedy evaluation averages at least 475 over 10 episodes. Print `not solved` if the
+training budget runs out first. Settings that work:
+
+- Bins `1 1 6 12` (stage 8), gamma 0.99, and a Q table initialised to zero.
+- For episode number `e` (from 1), use `alpha = epsilon = clamp(1 - log10(e / 25), lo, 1)`, with
+  `lo` = 0.1 for alpha and 0.05 for epsilon. Both decay smoothly from 1.
+- Act epsilon-greedily (stage 7). After each step, apply the stage 9 update with `terminated` as the
+  done flag. Cut episodes off at 500 steps as usual.
+- Every 50 training episodes, run 10 **greedy** episodes (epsilon = 0, no learning) to evaluate.
+  Give evaluation its own generator seeded with `SEED + 1`, so evaluating doesn't change the training
+  stream. Train for up to 2000 episodes.
+
+The tests run this on every commit, so it should finish in a few seconds. This is the notebook's
+round-based "train, then test 100 episodes" loop, in miniature.
+'''
+tests = [
+  { args = ["qlearn", "1"], expect = "solved" },
+  { args = ["qlearn", "2"], expect = "solved" },
+]
+
+[[stages]]
+name = "A neural network forward pass"
+instructions = '''
+A table can't scale: CartPole has 4 continuous inputs, and Atari has thousands of pixels. Deep RL
+replaces the table with a function approximator. The `'MlpPolicy'` in both notebooks is a
+multi-layer perceptron (`net_arch=[256, 256]` for DQN and `[64, 64]` for PPO).
+
+An MLP with layer sizes `[n0, n1, ..., nk]` has one fully connected layer per consecutive pair. Layer
+`i` has a weight matrix `W` of shape `(n_{i+1}, n_i)` and a bias vector `b` of length `n_{i+1}`, and
+computes `z = W x + b`. Every layer except the last then applies the activation. `relu(z) = max(z, 0)`
+is what SB3's DQN uses, and `tanh` is what SB3's PPO uses. The last layer stays linear: Q-values and
+action logits can be any real number.
+
+Initialise the weights the way PyTorch's `nn.Linear` does, using uniform values in
+`[-1/sqrt(fan_in), 1/sqrt(fan_in)]`, where `fan_in = n_i`. Draw them from your generator in this
+exact order: for each layer, first layer first, fill `W` row by row (all of row 0, then all of row 1,
+and so on), then fill `b`. Each value is `uniform(-bound, bound)`.
+
+Command: `rl.py mlp SEED SIZES ACT`, where SIZES is comma-separated (like `4,8,2`) and ACT is `relu`
+or `tanh`. Each stdin line is an input vector. Print the network's output for each one.
+
+Store inputs as batches (a matrix with one row per sample) from the start. The next stages train on
+batches.
+'''
+tests = [
+  { args = ["mlp", "1", "2,3,1", "relu"], stdin = "0.5 -0.5\n1 2\n", expect = "0.0413\n0.3812" },
+  { args = ["mlp", "7", "4,8,8,2", "tanh"], stdin = "0.01 0.02 0.03 0.04\n1 -1 0.5 -0.5\n", expect = "0.3648 -0.0794\n0.0871 0.0055" },
+  { args = ["mlp", "3", "1,1", "relu"], stdin = "2\n-3\n", expect = "-1.1456\n2.7199" },
+  { args = ["mlp", "11", "3,5,4", "relu"], stdin = "0 0 0\n-1 2 0.3\n", expect = "0.1318 -0.1963 0.4084 0.0214\n0.4567 0.3031 0.4248 -0.4482" },
+]
+
+[[stages]]
+name = "Backpropagation and SGD"
+instructions = '''
+Training means adjusting the weights to reduce a **loss**. Backpropagation computes the gradient of
+the loss with respect to every weight by applying the chain rule backwards through the layers. For a
+layer `z = W x + b`, given the gradient `dz` of the loss with respect to `z`:
+`dW = dz^T · x` (summed over the batch), `db = sum of dz` over the batch, and `dx = dz · W`. Going
+back through an activation multiplies by its derivative: for relu, 1 where the layer's output was
+positive and 0 elsewhere; for tanh, `1 - h²`, where `h` is the layer's output.
+
+In DQN the network outputs a value for every action, but a stored transition only has a target for
+the action actually taken. So the loss only looks at **one output per sample**: sample `j` has input
+`x_j`, output index `k_j` and target `t_j`, and its error is `d_j = y_j[k_j] - t_j`. The batch loss is
+the mean over samples of:
+
+- `mse`: `d²`, with gradient `2d`.
+- `huber` (smooth L1, which SB3's DQN uses): `0.5 d²` if `|d| < 1`, else `|d| - 0.5`. Its gradient
+  is `d` or `sign(d)`. It's quadratic near zero but grows only linearly, so one wildly wrong target
+  can't blow up the update.
+
+Plain SGD then does `w = w - lr * gradient` for every parameter.
+
+Command: `rl.py train SEED SIZES ACT LOSS OPT LR CLIP`. Build the network as in stage 11 and use OPT
+`sgd`. You'll handle CLIP in the next stage, and it is 0 here. Each stdin line is one batch, with
+samples separated by `|`, each written `x1 x2 ... ; k t`. For every batch, print the loss
+**before** updating, then take one optimiser step. After the last batch, print the network's new
+output for each sample input of that last batch.
+
+Check your gradients numerically if you're unsure. Nudge one weight by ±1e-6 and compare the slope
+of the loss with your gradient.
+'''
+tests = [
+  { args = ["train", "1", "2,4,2", "relu", "mse", "sgd", "0.1", "0"], stdin = "0.5 -1 ; 0 1\n0.5 -1 ; 0 1\n0.5 -1 ; 0 1 | 1 1 ; 1 -2\n", expect = "2.3617\n0.8433\n2.5688\n0.5933 -0.5529\n0.4462 -0.4620" },
+  { args = ["train", "4", "3,6,6,2", "tanh", "huber", "sgd", "0.05", "0"], stdin = "0.1 0.2 0.3 ; 1 5 | -0.3 0.1 0.9 ; 0 -0.2\n0.1 0.2 0.3 ; 1 5\n0.7 0.7 -0.7 ; 0 0.1 | 0.1 0.2 0.3 ; 1 5 | 0 0 1 ; 1 0\n", expect = "2.1024\n4.0919\n1.3715\n0.1437 0.4712\n0.1077 0.5430\n0.0944 0.5436" },
+  { args = ["train", "9", "1,3,1", "relu", "mse", "sgd", "0.01", "0"], stdin = "1 ; 0 2\n2 ; 0 4\n3 ; 0 6\n1 ; 0 2\n", expect = "2.2320\n9.3338\n18.4252\n0.5910\n1.2879" },
+]
+
+[[stages]]
+name = "Adam and gradient clipping"
+instructions = '''
+SB3 trains with **Adam**, not plain SGD. Adam keeps two running averages per parameter, one of the
+gradient (momentum) and one of the squared gradient, and scales each parameter's step by its own
+history. Parameters with consistently large gradients get smaller steps, and the result is far less
+sensitive to the learning rate. With step counter `t` starting at 1, and `b1 = 0.9`, `b2 = 0.999`,
+`eps = 1e-8`, both averages starting at zero:
+
+```
+m = b1 * m + (1 - b1) * g
+v = b2 * v + (1 - b2) * g^2
+m_hat = m / (1 - b1^t)          # bias correction: m and v start at zero
+v_hat = v / (1 - b2^t)
+w = w - lr * m_hat / (sqrt(v_hat) + eps)
+```
+
+RL gradients can spike, so SB3 also clips them (`max_grad_norm` is 10 for DQN and 0.5 for PPO).
+Compute the **global** L2 norm over all gradients of all parameters together. If CLIP > 0, let
+`coef = CLIP / (norm + 1e-6)`, and if `coef < 1`, multiply every gradient by `coef` before the
+optimiser step. That's exactly what PyTorch's `clip_grad_norm_` does. Clipping applies to both
+optimisers.
+
+Command: same as the last stage, `rl.py train ...`, but now OPT can be `adam` and CLIP can be
+non-zero.
+'''
+tests = [
+  { args = ["train", "2", "3,8,2", "tanh", "huber", "adam", "0.01", "0"], stdin = "0.5 0.1 -0.3 ; 0 2 | 1 1 1 ; 1 -1\n0.5 0.1 -0.3 ; 0 2\n0.5 0.1 -0.3 ; 0 2 | 1 1 1 ; 1 -1\n", expect = "0.9315\n1.4434\n0.8135\n0.1728 -0.0635\n0.0133 -0.3772" },
+  { args = ["train", "2", "3,8,2", "relu", "mse", "sgd", "0.5", "0.1"], stdin = "0.5 0.1 -0.3 ; 0 2 | 1 1 1 ; 1 -1\n0.5 0.1 -0.3 ; 0 2\n", expect = "3.0933\n4.6561\n-0.0830 0.1479" },
+  { args = ["train", "5", "2,16,1", "relu", "mse", "adam", "0.05", "1"], stdin = "1 0 ; 0 1\n0 1 ; 0 -1\n1 1 ; 0 0\n1 0 ; 0 1 | 0 1 ; 0 -1\n", expect = "1.8618\n1.4439\n0.0053\n0.9294\n0.1266\n-0.1483" },
+]
+
+[[stages]]
+name = "A replay buffer"
+instructions = '''
+If a network learns from transitions in the order they happen, consecutive samples are nearly
+identical, and it forgets older lessons as fast as it learns new ones. DQN's fix is **experience
+replay**: store every transition in a big buffer (`buffer_size=1000000` in the notebook), and train
+on random minibatches drawn from it. This decorrelates the samples, and every experience gets reused
+many times.
+
+Build a fixed-capacity circular buffer. While it's not full, `add` appends. Once it is full, each
+`add` overwrites the **oldest** entry. `sample` draws a batch **with replacement**: for each of the
+batch's items, call `randint(current_size)` and take that slot. Slots are numbered in insertion
+position, so after wrapping, slot 0 holds whatever overwrote the first entry.
+
+Command: `rl.py replay CAPACITY BATCH SEED`. Each stdin line is one operation:
+
+- `add <anything>` stores the rest of the line (after the space) as an opaque transition.
+- `size` prints the number of stored transitions.
+- `sample` prints BATCH sampled transitions joined by ` | `.
+
+The buffer will soon store `(obs, action, reward, next_obs, terminated)` tuples. Keep it generic.
+'''
+tests = [
+  { args = ["replay", "3", "4", "1"], stdin = "add a\nadd b\nsample\nsize\nadd c\nadd d\nadd e\nsize\nsample\nsample\n", expect = "b | b | b | a\n2\n3\ne | c | c | e\nd | c | e | e" },
+  { args = ["replay", "5", "2", "8"], stdin = "add 0.1 0 1 0.2 0\nadd 0.2 1 1 0.3 1\nsample\nsample\nsample\n", expect = "0.2 1 1 0.3 1 | 0.2 1 1 0.3 1\n0.2 1 1 0.3 1 | 0.2 1 1 0.3 1\n0.1 0 1 0.2 0 | 0.1 0 1 0.2 0" },
+]
+
+[[stages]]
+name = "TD targets and target networks"
+instructions = '''
+DQN's regression targets are `y = r + gamma * max_a' Q(s', a')`, but if `Q` is the network being
+trained, every update moves the targets too, and the network ends up chasing its own tail. So DQN
+keeps a second, frozen copy, the **target network**. It computes the targets and is only refreshed
+from the online network every `target_update_interval` steps (10 in the notebook).
+
+Two subtleties:
+
+- **Terminated vs truncated.** If the pole fell (terminated), there is no future: `y = r`. If the
+  episode merely hit the 500-step time limit (truncated), the state still has a future, so you must
+  still bootstrap. Store only `terminated` as the done flag. Treating truncation as death teaches the
+  agent that step 500 is a cliff.
+- **Double DQN.** Taking `max` over noisy estimates is biased upward. Double DQN uses the **online**
+  network to choose `a* = argmax Q_online(s', ·)` (lowest index on ties) and the **target** network
+  to value it: `y = r + gamma * Q_target(s', a*)`.
+
+Command: `rl.py td GAMMA` or `rl.py td GAMMA double`. Each stdin line is `r done | q_target values`,
+or in double mode, `r done | q_online values | q_target values`, with `done` as 0 or 1. Print every
+line's target, on one line.
+'''
+tests = [
+  { args = ["td", "0.99"], stdin = "1 0 | 2 5\n1 1 | 2 5\n-0.5 0 | -1 -3 -2\n", expect = "5.9500 1.0000 -1.4900" },
+  { args = ["td", "0.9", "double"], stdin = "1 0 | 3 1 | 0.5 4\n0 0 | 1 1 | 2 7\n2 1 | 9 0 | 9 9\n", expect = "1.4500 1.8000 2.0000" },
+  { args = ["td", "0.5"], stdin = "0 0 | 0\n10 0 | -4 -8\n", expect = "0.0000 8.0000" },
+]
+
+[[stages]]
+name = "DQN solves CartPole"
+instructions = '''
+Now build the algorithm the CartPole notebook runs through `sb3.DQN`, from your own parts. Each
+environment step:
+
+1. Act epsilon-greedily on the online network's Q-values. Epsilon follows the stage 6 schedule.
+2. Step the environment and store `(obs, action, reward, next_obs, terminated)` in the replay buffer.
+   On termination **or** truncation, reset.
+3. Once the buffer has `learning_starts` transitions, sample a minibatch. Compute targets with the
+   target network (stage 15) and take one Adam step on the Huber loss for the taken actions (stages
+   12–13).
+4. Every `target_update_interval` steps, copy the online weights into the target network.
+
+Command: `rl.py dqn SEED`. Print `solved` once a greedy evaluation (epsilon 0, a separate evaluation
+generator and environment) averages a length of at least **195** over 10 episodes. That's the classic
+CartPole-v0 bar; v1 raised it to 475 because 195 got too easy. Print `not solved` if the budget runs
+out. Settings that work, about 5 seconds with numpy:
+
+- Network `4,64,64,2` with relu. Initialise both networks from the training generator, then copy
+  online into target.
+- Adam with lr 1e-3, gradient clipping at 10, gamma 0.99, buffer 50 000, batch 64.
+- learning_starts 1000, one gradient step per environment step, target update every 500 steps.
+- Epsilon from 1.0 to 0.05 over the first 20% of a 60 000-step budget. Evaluate every 1000 steps.
+
+DQN is famously twitchy: scores often rise, crash, then recover. Watch your stderr curve. The notebook
+saves a model every round and keeps the best one for the same reason.
+'''
+tests = [
+  { args = ["dqn", "3"], expect = "solved" },
+]
+
+[[stages]]
+name = "Categorical policies"
+instructions = '''
+DQN learns values and acts greedily on them. **Policy-gradient** methods like PPO, which the pendulum
+notebook uses, learn the policy directly: the network outputs a probability distribution over
+actions, and the agent samples from it. For discrete actions, the network outputs **logits**, and
+softmax turns them into probabilities: `p_i = exp(l_i) / sum_j exp(l_j)`. Subtract the largest logit
+before exponentiating, so large logits don't overflow. The result is identical.
+
+Three quantities matter:
+
+- `log p(a)`, the log-probability of an action. Policy gradients push it up for good actions.
+- Entropy, `-sum p_i log p_i`, which measures how random the policy still is. SB3's `ent_coef` can
+  reward keeping it high.
+- Sampling with inverse-CDF: draw `u = uniform()` and return the first index `i` where
+  `u < p_0 + ... + p_i`, adding in index order. If rounding means none qualifies, return the last
+  index.
+
+Command: `rl.py categorical SEED`. Each stdin line is `logits... | a`. Use one generator for all the
+lines, and print `p_0 ... p_n | log p(a) entropy | sampled_action` for each.
+'''
+tests = [
+  { args = ["categorical", "5"], stdin = "0 0 | 1\n1 2 3 | 0\n1000 999 | 1\n-1 0.5 0.5 -2 | 3\n", expect = "0.5000 0.5000 | -0.6931 0.6931 | 0\n0.0900 0.2447 0.6652 | -2.4076 0.8324 | 2\n0.7311 0.2689 | -1.3133 0.5822 | 0\n0.0968 0.4338 0.4338 0.0356 | -3.3352 1.0694 | 1" },
+  { args = ["categorical", "1"], stdin = "2 2 2 | 2\n0 5 | 0\n", expect = "0.3333 0.3333 0.3333 | -1.0986 1.0986 | 1\n0.0067 0.9933 | -5.0067 0.0402 | 1" },
+]
+
+[[stages]]
+name = "Gaussian policies"
+instructions = '''
+Pendulum's action is a continuous torque, so the policy outputs the **mean** `mu` of a normal
+distribution, and a separate learned parameter `log_std` sets its spread. SB3 learns `log_std`
+rather than `std`, which keeps the spread positive and lets it shrink smoothly. With several action
+dimensions, each is an independent normal, so log-probabilities and entropies **add up** across
+dimensions:
+
+- `log p(a) = sum over dims of [-0.5 * ((a - mu) / std)^2 - log_std - 0.5 * log(2π)]`
+- `entropy  = sum over dims of [0.5 + 0.5 * log(2π) + log_std]`
+
+To sample, build standard normals with Box–Muller: draw `u1 = uniform()` and `u2 = uniform()`, then
+`z = sqrt(-2 ln(1 - u1)) * cos(2π u2)`. Using `1 - u1` keeps the log away from 0. Then the action is
+`mu + std * z`, with one (u1, u2) pair per dimension, in order. The environment clips the action to
+[-2, 2], but the log-probability is always of the unclipped sample.
+
+Command: `rl.py gaussian SEED`. Each stdin line is `mu... | log_std... | a...`. Print
+`log p(a) entropy | sample...` for each.
+'''
+tests = [
+  { args = ["gaussian", "2"], stdin = "0 | 0 | 0\n0.5 | -1 | 1.5\n0 0 | 0 0.5 | 1 -1\n", expect = "-0.9189 1.4189 | -0.0071\n-3.6135 0.4189 | 0.5479\n-3.0218 3.3379 | -0.4930 -0.1819" },
+  { args = ["gaussian", "3"], stdin = "-1.2 | -0.3 | -1\n2 | 1 | 0\n", expect = "-0.6554 1.1189 | -1.3117\n-2.1896 2.4189 | 5.3597" },
+]
+
+[[stages]]
+name = "Generalized advantage estimation"
+instructions = '''
+A policy gradient asks "was this action better or worse than usual?" That's the **advantage**:
+`A = (return actually obtained) - V(s)`, where `V(s)` is a learned critic's estimate of the state's
+value. Monte Carlo returns are unbiased but noisy. One-step TD errors
+`delta_t = r_t + gamma * V(s_{t+1}) - V(s_t)` are smooth but biased. **GAE** blends them with
+`lambda`:
+
+```
+A_t = delta_t + gamma * lambda * A_{t+1}       (swept backwards, A after the last step = 0)
+```
+
+At an episode boundary (`done_t` = 1), nothing flows across: use `V(s_{t+1}) = 0` in `delta_t` and
+drop the `A_{t+1}` term. With `lambda = 0` you get plain TD errors. With `lambda = 1` you get the
+Monte Carlo return minus V. The critic is trained toward `returns = A + V`. SB3's PPO uses
+`gae_lambda=0.95` by default.
+
+Command: `rl.py gae GAMMA LAMBDA`. Each stdin line is one rollout step, `reward value done`. The last
+line is `last V`, the critic's value of the state after the final step, which is used if that step
+wasn't done. Print `advantage return` for every step.
+'''
+tests = [
+  { args = ["gae", "0.99", "0.95"], stdin = "1 0.513 0\n1 0.647 0\n1 0.731 1\n0 0.218 0\n1 0.352 0\nlast 0.419\n", expect = "2.3781 2.8911\n1.3297 1.9767\n0.2690 1.0000\n1.1301 1.3481\n1.0628 1.4148" },
+  { args = ["gae", "0.9", "1"], stdin = "0 1 0\n0 1 0\n1 1 1\nlast 5\n", expect = "-0.1900 0.8100\n-0.1000 0.9000\n0.0000 1.0000" },
+  { args = ["gae", "0.99", "0"], stdin = "1 2 0\n-1 0.5 0\nlast -3\n", expect = "-0.5050 1.4950\n-4.4700 -3.9700" },
+]
+
+[[stages]]
+name = "The PPO clipped objective"
+instructions = '''
+Vanilla policy gradients take one step per batch of experience and can wreck the policy with a step
+that's too big. **PPO** reuses each rollout for several epochs, while making sure the new policy
+stays close to the one that collected the data. With `ratio = exp(logp_new - logp_old)`:
+
+```
+loss = -mean( min( ratio * A,  clip(ratio, 1 - CLIP, 1 + CLIP) * A ) )
+```
+
+The `min` makes the objective pessimistic. Once the ratio has moved more than `CLIP` (SB3's
+`clip_range`, 0.2) in the direction the advantage favours, the gradient vanishes, so there's no
+reward for going further. SB3 also logs two diagnostics, and you should too:
+
+- `clip_fraction`: the share of samples with `|ratio - 1| > CLIP`.
+- `approx_kl`: `mean((ratio - 1) - log ratio)`, an estimate of how far the policy moved.
+
+SB3 normalises advantages per minibatch by default: `A = (A - mean) / (std + 1e-8)`, where std is the
+**sample** standard deviation (divide by n - 1, as `torch.std` does).
+
+Command: `rl.py ppo-loss CLIP` or `rl.py ppo-loss CLIP norm`. Each stdin line is
+`logp_new logp_old advantage`. Treat all the lines as one minibatch and print
+`loss clip_fraction approx_kl`.
+'''
+tests = [
+  { args = ["ppo-loss", "0.2"], stdin = "-0.5 -0.7 1\n-1.2 -0.9 2\n-0.3 -0.3 -1\n-2 -1.5 -0.5\n", expect = "-0.3204 0.7500 0.0422" },
+  { args = ["ppo-loss", "0.2", "norm"], stdin = "-0.5 -0.7 1\n-1.2 -0.9 2\n-0.3 -0.3 -1\n-2 -1.5 -0.5\n", expect = "0.0220 0.7500 0.0422" },
+  { args = ["ppo-loss", "0.1"], stdin = "0 0 3\n0.5 0 -1\n", expect = "-0.6756 0.5000 0.0744" },
+]
+
+[[stages]]
+name = "PPO solves CartPole"
+instructions = '''
+Assemble PPO: an **actor** network outputs action logits, and a separate **critic** network outputs
+V(s). Repeat:
+
+1. **Rollout.** Run the current policy for `n_steps`, sampling actions (stage 17). Record the
+   observation, action, log-prob, reward, the critic's value and the done flag. Reset on termination
+   or truncation. On truncation, the episode didn't really end. A simple fix is to add
+   `gamma * V(next_obs)` to that step's reward before marking it done.
+2. **Advantages.** Run GAE over the rollout (stage 19), bootstrapping from V of the final
+   observation.
+3. **Update.** For `n_epochs`, shuffle the rollout into minibatches. For each minibatch, take one
+   Adam step on the clipped policy loss (stage 20, with normalised advantages) plus
+   `0.5 * mean((V - returns)^2)` for the critic, with gradients clipped to a global norm of 0.5.
+
+The policy-gradient piece: for the samples where the unclipped term is the one `min` picks, the loss
+gradient with respect to `logp_new` is `-ratio * A / batch_size`. Elsewhere it's 0. For a softmax
+policy, the gradient of `log p(a)` with respect to the logits is `onehot(a) - p`.
+
+Command: `rl.py ppo-cartpole SEED`. Print `solved` when a greedy evaluation (argmax action, 10
+episodes, separate generator) averages a return of at least 475. Settings that work in a few seconds:
+actor `4,64,64,2` and critic `4,64,64,1`, both tanh. Scale the actor's last-layer weights by 0.01 and
+zero its bias, so the policy starts near uniform. Use n_steps 1024, 10 epochs, minibatch 64, Adam lr
+1e-3, gamma 0.99, lambda 0.95, clip 0.2, evaluate after every rollout, and a budget of 150 000 steps.
+To shuffle with your own generator, use a Fisher–Yates loop with `randint`.
+'''
+tests = [
+  { args = ["ppo-cartpole", "2"], expect = "solved" },
+]
+
+[[stages]]
+name = "PPO swings up the pendulum"
+instructions = '''
+This is the problem the repo's video leaves you with: swing the pendulum up and hold it there, with a
+continuous torque. Switch your PPO's actor to a Gaussian policy (stage 18). The actor outputs `mu`,
+and `log_std` becomes a learned parameter, starting at 0, that the optimiser updates with everything
+else. Pass the sampled (unclipped) action to the environment, which clips it.
+
+The gradients you need, with `z = (a - mu) / std`: `d log p / d mu = z / std`, and
+`d log p / d log_std = z² - 1`. Evaluate greedily by acting with `mu` itself.
+
+Command: `rl.py ppo-pendulum SEED`. Print `solved` once a greedy evaluation averages a return of at
+least **-250** over 10 episodes. Random play scores about -1200, and a good swing-up policy scores
+-150 to -250. The notebook's settings work well here. Use the same network shapes as before
+(`3,64,64,1` for the actor's mean), n_steps 1024, lr 1e-3, and **gamma 0.9**: swinging up pays off
+within a second or two, so a short horizon makes learning much easier. Keep lambda 0.95, clip 0.2,
+10 epochs, minibatch 64, and a budget of 300 000 steps.
+
+If your agent stalls around -1000 to -800, it's usually the log_std gradient, the truncation
+bootstrap, or advantages that aren't normalised.
+'''
+tests = [
+  { args = ["ppo-pendulum", "2"], expect = "solved" },
+]
+
+[[stages]]
+name = "Sampling a search space"
+instructions = '''
+Look at all those hyperparameters. The repo's `rl-demo-pendulum-ax-hpo` notebook hands them to Ax
+(Bayesian optimisation) and logs each trial to Weights & Biases. The core of any tuner is the same:
+define a **search space**, sample configurations, run them, and compare. Random search is a
+surprisingly strong baseline, and the details of the space matter more than the search algorithm.
+Learning rates span orders of magnitude, so they're sampled on a **log** scale.
+
+For each trial, draw these in this exact order:
+
+1. `learning_rate = 10^uniform(-5, -2)`, log-uniform between 1e-5 and 1e-2.
+2. `gamma`, picked from `[0.9, 0.95, 0.98, 0.99, 0.999]` with `randint(5)`.
+3. `n_steps`, picked from `[256, 512, 1024, 2048]` with `randint(4)`.
+4. `clip_range = uniform(0.1, 0.3)`.
+
+Command: `rl.py search SEED N`. For trial i (from 0), print
+`trial <i>: learning_rate=<lr> gamma=<gamma> n_steps=<n> clip_range=<clip>`. Write the learning rate
+in scientific notation with 3 decimals (`1.234e-04`, Python's `.3e`), gamma as written in the list,
+and clip_range with the usual 4 decimals.
+'''
+tests = [
+  { args = ["search", "0", "5"], expect = "trial 0: learning_rate=4.466e-03 gamma=0.98 n_steps=256 clip_range=0.2942\ntrial 1: learning_rate=2.085e-05 gamma=0.95 n_steps=256 clip_range=0.2543\ntrial 2: learning_rate=5.458e-05 gamma=0.999 n_steps=512 clip_range=0.2522\ntrial 3: learning_rate=3.731e-04 gamma=0.98 n_steps=1024 clip_range=0.2037\ntrial 4: learning_rate=2.929e-04 gamma=0.99 n_steps=256 clip_range=0.2688" },
+  { args = ["search", "42", "3"], expect = "trial 0: learning_rate=1.678e-03 gamma=0.9 n_steps=512 clip_range=0.1688\ntrial 1: learning_rate=1.300e-05 gamma=0.999 n_steps=256 clip_range=0.2601\ntrial 2: learning_rate=1.047e-04 gamma=0.99 n_steps=256 clip_range=0.1986" },
+]
+
+[[stages]]
+name = "Pruning bad trials"
+instructions = '''
+Each RL trial takes minutes to hours, so a tuner shouldn't let a hopeless one run to the end. A
+**pruner** watches trials' intermediate scores (the notebook's evaluation callback reports one every
+`check_freq` steps) and stops trials that are clearly behind. The **median stopping rule** used by
+Optuna and others works like this. At report step `k`, a trial is pruned if its score is **strictly
+below the median** of the step-`k` scores of all *earlier* trials that reached step `k`.
+
+Details:
+
+- Trials run one after another, in input order.
+- Never prune during the first WARMUP report steps. Checks start at step `WARMUP + 1`, and steps are
+  counted from 1.
+- A step with no earlier trials reaching it can't prune.
+- The median of an even count is the mean of the middle two values.
+- A pruned trial's scores up to and including the step it was pruned at **count** for later trials.
+  Its later scores never happened.
+
+Command: `rl.py prune WARMUP`. Each stdin line is one trial's sequence of intermediate scores
+(higher is better). For each trial i (from 0), print either `trial <i>: pruned at step <k>` or
+`trial <i>: completed, final score <last score>`. Finally, print `best: trial <i>` for the completed
+trial with the highest final score (the earliest on a tie), or `best: none`.
+
+That's the whole toolkit behind the repo: environments, value learning, deep Q-networks, policy
+optimisation and tuning, every piece written by you. Try pointing your search and pruner at your own
+PPO next.
+'''
+tests = [
+  { args = ["prune", "1"], stdin = "1 2 3 4\n0 1 2 3\n2 3 4 5\n1 1.5 3.5 2\n", expect = "trial 0: completed, final score 4.0000\ntrial 1: pruned at step 2\ntrial 2: completed, final score 5.0000\ntrial 3: pruned at step 2\nbest: trial 2" },
+  { args = ["prune", "0"], stdin = "5 5\n4 9\n6 1\n", expect = "trial 0: completed, final score 5.0000\ntrial 1: pruned at step 1\ntrial 2: pruned at step 2\nbest: trial 0" },
+  { args = ["prune", "2"], stdin = "10 20 30\n1 2 3\n100 200 300\n", expect = "trial 0: completed, final score 30.0000\ntrial 1: pruned at step 3\ntrial 2: completed, final score 300.0000\nbest: trial 2" },
+]

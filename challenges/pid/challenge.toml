@@ -1,0 +1,190 @@
+title = "Build your own PID controller"
+reference = "python reference/main.py"
+
+[[stages]]
+name = "Proportional control"
+instructions = """
+A PID controller looks at the gap between where a system *should* be (the setpoint) and where it
+*is* (the measurement), and works out a control output, such as heater power or motor voltage. That
+gap is the error: `error = setpoint - measurement`. The simplest controller pushes in proportion to
+the error: `output = kp * error`. Big error, big push; no error, no push.
+
+Your program reads stdin. The first line configures the controller as whitespace-separated
+`key=value` tokens in any order. Over this course the keys are `kp`, `ki`, `kd`, `dt`, `min` and
+`max`, and any key can be left out. Missing keys default to `kp=0 ki=0 kd=0 dt=1`, and leaving out
+`min`/`max` means no limit. Parse all six now, even though only `kp` matters yet. Values are decimal
+numbers. Each following non-empty line is one control step, `<setpoint> <measurement>`, and for each
+one you print the controller output on its own line.
+
+Every number you print in this course uses exactly 4 decimal places (`1.7500`, `-6.0000`). If a
+value would print as `-0.0000`, print `0.0000` instead.
+
+Build the controller as an object that keeps state between steps, with one "step" operation that
+takes a setpoint and a measurement and returns an output. Every later stage adds to that object.
+"""
+tests = [
+  { stdin = "kp=2.5\n1 0.3\n1 0.75\n-2 0.4\n", expect = "1.7500\n0.6250\n-6.0000" },
+  { stdin = "dt=0.2 kp=1.3\n0 0\n0.5 2\n3.1 3.1\n", expect = "0.0000\n-1.9500\n0.0000" },
+  { stdin = "kp=0.5\n1 1.00004\n", expect = "0.0000" },
+]
+
+[[stages]]
+name = "Integral term and the fixed timestep"
+instructions = """
+A proportional controller often settles short of the setpoint. Near the target the error is small,
+so the push is too small to beat whatever is pulling the system away. The integral term fixes this.
+It adds up the error over time, so even a tiny error that won't go away keeps building pressure
+until it's gone.
+
+The controller runs at a fixed timestep `dt` (in seconds). Approximate the integral as a running sum.
+On each step, first add `error * dt` to the accumulated integral, then compute
+`output = kp * error + ki * integral`. The integral starts at zero and keeps its value from one step
+to the next.
+
+The input and output formats are the same as in the previous stage.
+"""
+tests = [
+  { stdin = "kp=1 ki=0.5 dt=0.1\n1 0\n1 0.2\n1 0.5\n0 0.8\n", expect = "1.0500\n0.8900\n0.6150\n-0.7250" },
+  { stdin = "ki=1.5 dt=0.25\n2 0\n2 0.3\n-1 0.3\n-1 0.3\n", expect = "0.7500\n1.3875\n0.9000\n0.4125" },
+  { stdin = "kp=0.8 ki=0.3\n1 0.1\n1 0.6\n", expect = "0.9900\n0.7100" },
+]
+
+[[stages]]
+name = "Derivative term"
+instructions = """
+The derivative term looks at how fast the error is changing and pushes against that change. It acts
+like damping: if the system is rushing toward the setpoint, the derivative eases off before it
+overshoots.
+
+Estimate the derivative with a backward difference, `(error - previous_error) / dt`, and add
+`kd` times it to the output: `output = kp * error + ki * integral + kd * derivative`. On the very
+first step there is no previous value, so the derivative is 0. Your controller now has to remember
+the last value it saw.
+
+Every test in this stage holds the setpoint constant. Stage 6 will change what the derivative is
+taken of, and with a constant setpoint both versions give the same answer.
+"""
+tests = [
+  { stdin = "kp=1 kd=0.2 dt=0.1\n2 0\n2 0.5\n2 1.1\n2 1.4\n", expect = "2.0000\n0.5000\n-0.3000\n0.0000" },
+  { stdin = "kp=0.6 ki=0.4 kd=0.05 dt=0.05\n1 0.2\n1 0.23\n1 0.27\n", expect = "0.4960\n0.4634\n0.4440" },
+  { stdin = "kd=3\n0.7 0.1\n0.7 0.4\n", expect = "0.0000\n-0.9000" },
+]
+
+[[stages]]
+name = "Output clamping"
+instructions = """
+Real actuators have limits. A valve can't open past 100% and a motor driver has a maximum voltage.
+Asking for more than the hardware can give is pointless, so the controller clamps its output to
+`[min, max]`.
+
+After computing the PID sum, clamp it: if it is above `max`, output `max`; if it is below `min`,
+output `min`. If a bound isn't given, there is no limit on that side. Clamp only the value you
+return, and don't change the terms that produced it.
+
+Every test here has `ki=0`. The next stage shows what clamping does to the integral.
+"""
+tests = [
+  { stdin = "kp=4 min=-1 max=2\n1 0\n1 0.6\n1 0.9\n-1 0\n", expect = "2.0000\n1.6000\n0.4000\n-1.0000" },
+  { stdin = "kp=3 max=1.5\n-5 0\n2 0\n0.4 0.1\n", expect = "-15.0000\n1.5000\n0.9000" },
+  { stdin = "kp=2 kd=0.1 dt=0.1 min=-0.5 max=0.5\n1 0\n1 0.3\n1 0.85\n", expect = "0.5000\n0.5000\n-0.2500" },
+]
+
+[[stages]]
+name = "Integral anti-windup"
+instructions = """
+Clamping causes a nasty problem. While the output is pinned at a limit, the error stays large and
+the integral keeps growing ("winding up"), even though the extra demand does nothing. When the system
+finally reaches the setpoint, that huge integral keeps the output pinned for a long time, and the
+system overshoots badly while the integral slowly unwinds.
+
+Use conditional integration (integrator clamping) to stop this. On each step:
+
+1. Compute the error and the derivative as before.
+2. Compute a tentative integral, `integral + error * dt`, and the unclamped output it would give.
+3. If that tentative output is above `max` and `error > 0`, or below `min` and `error < 0`, throw the
+   tentative integral away and keep the old one. Otherwise, keep the tentative integral.
+4. Recompute the output with whichever integral you kept, then clamp it as before.
+
+The error-sign check matters. When the output is saturated but the error is pulling it back toward
+the allowed range, integrating helps you recover, so it is still allowed. Without any limits this
+stage changes nothing.
+"""
+tests = [
+  { stdin = "kp=1 ki=2 dt=0.1 min=-1 max=1\n5 0\n5 0\n5 0\n0 0.7\n0 0.3\n", expect = "1.0000\n1.0000\n1.0000\n-0.8400\n-0.5000" },
+  { stdin = "kp=1 ki=1 kd=1 min=-5 max=1\n0 3\n0 0.5\n0 0.4\n", expect = "-3.0000\n1.0000\n-1.2000" },
+  { stdin = "kp=0.2 ki=1 dt=0.5 min=0 max=1\n0.5 0.9\n0.5 0.9\n2 1.6\n2 1.6\n", expect = "0.0000\n0.0000\n0.2800\n0.4800" },
+]
+
+[[stages]]
+name = "No derivative kick"
+instructions = """
+Taking the derivative of the error has a flaw. When someone changes the setpoint, the error jumps in
+a single step, so `(error - previous_error) / dt` becomes enormous and the output gets a violent
+one-step spike. This is called derivative kick, and it is hard on actuators.
+
+The usual fix is to take the derivative of the measurement instead. When the setpoint is constant,
+d(error)/dt equals -d(measurement)/dt, so nothing changes. When the setpoint jumps, the kick is gone,
+because the measurement can't jump.
+
+Replace your derivative with `-(measurement - previous_measurement) / dt`, still multiplied by `kd`
+and still 0 on the first step. Remember the previous measurement instead of the previous error.
+Everything else, including anti-windup and clamping, stays the same.
+"""
+tests = [
+  { stdin = "kp=1 kd=0.5 dt=0.1\n0 0\n1 0\n1 0.1\n1 0.3\n", expect = "0.0000\n1.0000\n0.4000\n-0.3000" },
+  { stdin = "kp=0.4 ki=0.2 kd=0.3 dt=0.2\n1 0.5\n3 0.55\n3 0.7\n-1 0.8\n", expect = "0.2200\n1.0230\n0.9050\n-0.7320" },
+  { stdin = "kd=2 dt=0.5\n10 1\n-10 1\n", expect = "0.0000\n0.0000" },
+]
+
+[[stages]]
+name = "Closing the loop"
+instructions = """
+So far you've fed in made-up measurements. Now let the controller drive a simulated plant and read
+its output back, which closes the feedback loop. Use a first-order system, the simplest model of
+things like a room heating up or a motor spinning up. It moves toward `gain * u` at a rate set by its
+time constant `tau`. Advance it with forward Euler at the controller's `dt`:
+
+`y_next = y + dt * (gain * u - y) / tau`
+
+When started with the argument `--sim`, the first stdin line is the controller config as before.
+The second line is the plant config, as `key=value` tokens `gain`, `tau` and `y0` (the starting
+output), which default to `gain=1 tau=1 y0=0`. Each following non-empty line is a segment,
+`<setpoint> <steps>`: run that many steps at that setpoint. Segments run one after another on the
+same controller and plant, so the state carries over.
+
+Each step does three things. It feeds the setpoint and the current plant output `y` to the
+controller, which gives `u`. It advances the plant with that `u`. Then it prints `<y> <u>` with the
+*new* `y`, both to 4 decimals and separated by one space. Keep the plant separate from the
+controller, because the controller shouldn't know what it is driving.
+
+Without arguments the program must still behave as in earlier stages.
+"""
+tests = [
+  { args = ["--sim"], stdin = "kp=2 dt=0.1\ngain=1 tau=0.5\n1 4\n", expect = "0.4000 2.0000\n0.5600 1.2000\n0.6240 0.8800\n0.6496 0.7520" },
+  { args = ["--sim"], stdin = "kp=1 ki=2 dt=0.1\ngain=2 tau=1 y0=0.5\n1.5 3\n", expect = "0.6900 1.2000\n0.8554 1.1720\n0.9970 1.1355" },
+  { args = ["--sim"], stdin = "kp=3 ki=2 kd=0.1 dt=0.1 min=0 max=2\ngain=1 tau=0.5\n1 2\n0.2 2\n", expect = "0.4000 2.0000\n0.6240 1.5200\n0.4992 0.0000\n0.3994 0.0000" },
+]
+
+[[stages]]
+name = "Tuning"
+instructions = """
+Choosing `kp`, `ki` and `kd` is called tuning. To compare candidate tunings fairly you need a single
+number that scores a run. A common one is the integral of absolute error (IAE): the sum of
+`|setpoint - y| * dt` over every step, where `y` is the plant output the controller sees at the
+start of that step (before the plant moves). Lower is better.
+
+When started with `--tune`, the first stdin line is the base controller config, the second is the
+plant config, and the third is a single segment, `<setpoint> <steps>`. Every following non-empty line
+is a candidate tuning, `<kp> <ki> <kd>`, which replaces those three gains in the base config. `dt`,
+`min` and `max` still come from the base config. Run a fresh simulation for each candidate, with a
+new controller and a plant reset to `y0`.
+
+For each candidate, print `<n> <iae>`, where `n` is its 1-based position and the IAE has 4 decimal
+places. Then print `best <n>` for the candidate with the lowest IAE. On a tie, the earlier candidate
+wins. Try your own plants afterwards and see how the clamp and the integral term change which gains
+come out on top.
+"""
+tests = [
+  { args = ["--tune"], stdin = "dt=0.1 max=2 kp=9\ngain=1 tau=0.5\n1 3\n1 0 0\n2 0 0\n4 0 0\n2 5 0\n", expect = "1 0.2480\n2 0.2040\n3 0.1880\n4 0.1980\nbest 3" },
+  { args = ["--tune"], stdin = "dt=0.5\ngain=0.5 tau=1 y0=1\n2 2\n1 0 0\n0 4 0\n6 0 0\n6 0 1\n", expect = "1 1.1250\n2 1.0000\n3 0.5000\n4 0.5000\nbest 3" },
+]
