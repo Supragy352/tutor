@@ -955,8 +955,17 @@ function updateLocalBanner() {
     return;
   }
   banner.hidden = false;
-  document.getElementById("local-banner-text").textContent =
-    `${dirty.length} local card move${dirty.length === 1 ? "" : "s"} saved in this browser. Connect a GitHub token to sync live, or copy gh commands / Urgent prompt.`;
+  const hasTok = Boolean(getToken());
+  const btn = document.getElementById("btn-connect-from-banner");
+  if (hasTok) {
+    document.getElementById("local-banner-text").textContent =
+      `${dirty.length} local card move${dirty.length === 1 ? "" : "s"} pending sync to GitHub.`;
+    btn.textContent = "⬆ Push Moves to GitHub";
+  } else {
+    document.getElementById("local-banner-text").textContent =
+      `${dirty.length} local card move${dirty.length === 1 ? "" : "s"} saved in this browser. Connect a GitHub token to sync live, or copy gh commands / Urgent prompt.`;
+    btn.textContent = "🔑 Connect Token";
+  }
 }
 
 function renderKPIs() {
@@ -1019,7 +1028,7 @@ function filteredIssues() {
     .filter(i => !q || (`#${i.number} ${i.title} ${i.body || ""}`).toLowerCase().includes(q));
 }
 
-async function moveIssue(issueNumber, targetCol, insertBeforeNum = null) {
+async function moveIssue(issueNumber, targetCol, insertBeforeNum = null, forceRemote = false) {
   const issue = issues.find(i => i.number === issueNumber);
   if (!issue) return;
 
@@ -1037,14 +1046,15 @@ async function moveIssue(issueNumber, targetCol, insertBeforeNum = null) {
   order[targetCol] = destList;
   saveOrder(order);
 
+  const tok = getToken();
   const prevCol = issueColumn(issue);
-  if (prevCol === targetCol) {
+  const needsRemoteSync = tok && (forceRemote || remoteColumn(issue) !== targetCol);
+  if (prevCol === targetCol && !needsRemoteSync) {
     renderIssues();
     renderKPIs();
     return;
   }
 
-  const tok = getToken();
   if (tok) {
     // Live write to GitHub API!
     const existingLabels = (issue.labels || []).map(l => l.name).filter(n => !LANE_LABELS.has(n));
@@ -1091,6 +1101,17 @@ async function moveIssue(issueNumber, targetCol, insertBeforeNum = null) {
   renderIssues();
   if (activeIssue && activeIssue.number === issueNumber && !document.getElementById("drawer-backdrop").hidden) {
     openDrawer(issue);
+  }
+}
+
+async function pushDirtyMoves() {
+  if (!getToken()) return;
+  const dirty = issues.filter(isDirty);
+  if (!dirty.length) return;
+  toast(`Syncing ${dirty.length} local move(s) to GitHub…`);
+  const ov = getOverrides();
+  for (const issue of dirty) {
+    await moveIssue(issue.number, ov[issue.number], null, true);
   }
 }
 
@@ -1519,13 +1540,21 @@ const openAuth = () => {
   document.getElementById("auth-token-input").focus();
 };
 document.getElementById("btn-auth").addEventListener("click", openAuth);
-document.getElementById("btn-connect-from-banner").addEventListener("click", openAuth);
+document.getElementById("btn-connect-from-banner").addEventListener("click", async () => {
+  if (getToken()) {
+    await pushDirtyMoves();
+    await syncGitHub();
+  } else {
+    openAuth();
+  }
+});
 document.getElementById("auth-close").addEventListener("click", () => { document.getElementById("auth-backdrop").hidden = true; });
 document.getElementById("auth-backdrop").addEventListener("click", e => { if (e.target.id === "auth-backdrop") e.currentTarget.hidden = true; });
 document.getElementById("auth-clear").addEventListener("click", () => {
   localStorage.removeItem(LS_TOKEN);
   document.getElementById("auth-backdrop").hidden = true;
   updateAuthBadge();
+  updateLocalBanner();
   toast("Disconnected GitHub token (read-only mode)");
 });
 document.getElementById("auth-form").addEventListener("submit", async e => {
@@ -1535,15 +1564,7 @@ document.getElementById("auth-form").addEventListener("submit", async e => {
   else localStorage.removeItem(LS_TOKEN);
   document.getElementById("auth-backdrop").hidden = true;
   updateAuthBadge();
-  // Push any pending local moves if token was just connected
-  const dirty = issues.filter(isDirty);
-  if (tok && dirty.length) {
-    toast(`Syncing ${dirty.length} local move(s) to GitHub…`);
-    const ov = getOverrides();
-    for (const issue of dirty) {
-      await moveIssue(issue.number, ov[issue.number]);
-    }
-  }
+  await pushDirtyMoves();
   await syncGitHub();
 });
 
@@ -1632,7 +1653,7 @@ renderKPIs();
 renderIssues();
 renderByox();
 renderRuns();
-syncGitHub();
+syncGitHub().then(() => pushDirtyMoves());
 pollTimer = setInterval(syncGitHub, 30000);
 </script>
 </body>
