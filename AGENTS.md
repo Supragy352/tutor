@@ -91,3 +91,33 @@ Before opening a PR or concluding a task, agents **must** verify their changes l
 - **Web Dashboard & Docs Parity:**
   - If you change course formulas or behavior shown in [`docs/index.html`](docs/index.html) (such as the interactive PID simulator), keep the JavaScript implementation in sync with the course specification in `challenges/pid/challenge.toml`.
   - Keep [`src/web/index.html`](src/web/index.html) accessible, sanitized (`DOMPurify`), and protected against DNS rebinding (`Host` validation) and cross-site triggers (`X-Tutor` header).
+
+---
+
+## 5. Kanban Priority & Agent Dispatch Protocol
+
+The owner organizes work on the live Mission Control Kanban board ([`docs/dashboard.html`](docs/dashboard.html), published at `https://supragy352.github.io/tutor/dashboard.html`), which syncs directly with GitHub Issue labels on `Supragy352/tutor`:
+
+| Kanban Column | GitHub Label | Meaning for Agents |
+|---|---|---|
+| **Urgent** | `priority:urgent` | **Pick up first.** Highest-priority work explicitly queued by the owner. |
+| **Up Next** | `priority:high` | Pick up after `priority:urgent` is clear (or when requested). |
+| **Backlog** | `priority:normal` (or unlabeled) | Lower-priority backlog. |
+| **Active / PR** | `status:in-progress` / `status:in-review` | Already claimed by an agent or waiting on an open PR review. Do **not** duplicate without checking existing PRs/branches. |
+| **Done** | Closed issue | Completed. |
+
+### Agent Pickup Rules
+1. **Check Urgent Queue First:** Before selecting a task, inspect open issues ordered by Kanban lane:
+   ```sh
+   gh issue list --state open --label "priority:urgent" --json number,title,labels
+   gh issue list --state open --label "priority:high" --json number,title,labels
+   ```
+2. **Claim When Starting:** When starting work on an issue, transition its Kanban label to `status:in-progress` (removing `priority:*` labels so it moves cleanly into the **Active / PR** column):
+   ```sh
+   gh issue edit <N> --remove-label "priority:urgent,priority:high,priority:normal" --add-label "status:in-progress"
+   ```
+3. **Move to In Review on PR Open:** Once a PR referencing `Closes #<N>` is opened with passing CI, switch `status:in-progress` to `status:in-review`:
+   ```sh
+   gh issue edit <N> --remove-label "status:in-progress" --add-label "status:in-review"
+   ```
+

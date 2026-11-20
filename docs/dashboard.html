@@ -14,13 +14,14 @@
   --ink: #1b2822;
   --muted: #5b6a61;
   --panel: #f8faf4;
-  --panel-alt: #f1f5eb;
+  --panel-alt: #f0f4ea;
   --rule: #c3cfb8;
   --signal: #2350c4;
   --setpoint: #b2452b;
   --ok: #256d49;
   --warn: #a36200;
   --crit: #b3261e;
+  --active: #6d3fd4;
   --code-bg: #1d2a24;
   --code-ink: #e3ebdf;
   --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
@@ -31,14 +32,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e; --panel-alt: #1f2b25;
-    --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b;
+    --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b; --active: #b794ff;
     --code-bg: #0c120f; --code-ink: #dce6d8;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e; --panel-alt: #1f2b25;
-  --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b;
+  --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b; --active: #b794ff;
   --code-bg: #0c120f; --code-ink: #dce6d8;
   color-scheme: dark;
 }
@@ -57,27 +58,31 @@ body {
 a { color: var(--signal); }
 code { font-family: var(--mono); font-size: .88em; }
 h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.08; margin: 0; }
-button, input, select { font: inherit; color: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
 
+/* Topbar */
 .topbar {
   border-bottom: 1px solid var(--rule);
   background: var(--panel);
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 25;
 }
 .topbar-inner {
-  max-width: 1240px;
+  max-width: 1420px;
   margin: 0 auto;
   padding: 10px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
-.brand-group { display: flex; align-items: baseline; gap: 12px; }
+.brand-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .topbar-brand { font-family: var(--display); font-weight: 700; font-size: 24px; text-decoration: none; color: var(--ink); }
 .sync-pill {
   font-family: var(--mono);
@@ -89,9 +94,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   color: var(--muted);
 }
 .sync-pill.live { border-color: var(--ok); color: var(--ok); }
-.topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
-.topbar-actions a { text-decoration: none; color: var(--muted); padding: 4px 8px; }
-.topbar-actions a:hover, .topbar-actions a[aria-current="page"] { color: var(--signal); }
+.sync-pill.writable { border-color: var(--signal); color: var(--signal); }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
+.topbar-actions a.nav-link { text-decoration: none; color: var(--muted); padding: 4px 8px; }
+.topbar-actions a.nav-link:hover, .topbar-actions a.nav-link[aria-current="page"] { color: var(--signal); }
+
 .btn {
   padding: 6px 12px;
   border: 1px solid var(--rule);
@@ -105,49 +112,54 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   align-items: center;
   gap: 6px;
   text-decoration: none;
+  transition: border-color .15s, color .15s, background .15s;
 }
 .btn:hover { border-color: var(--signal); color: var(--signal); }
 .btn.primary { background: var(--signal); border-color: var(--signal); color: #fff; }
 .btn.primary:hover { opacity: .92; color: #fff; }
-.btn.small { padding: 4px 9px; font-size: 11px; }
+.btn.urgent { background: var(--crit); border-color: var(--crit); color: #fff; }
+.btn.urgent:hover { opacity: .92; color: #fff; }
+.btn.small { padding: 4px 8px; font-size: 11px; }
+.btn.xs { padding: 2px 6px; font-size: 10.5px; }
+.btn[aria-pressed="true"] { background: var(--signal); border-color: var(--signal); color: #fff; }
 
 .page {
-  max-width: 1240px;
+  max-width: 1420px;
   margin: 0 auto;
-  padding: 28px 20px 80px;
+  padding: 24px 20px 80px;
   display: grid;
-  gap: 28px;
+  gap: 22px;
 }
 
 .hero-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 .label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.hero-head h1 { font-size: clamp(36px, 5vw, 54px); margin-top: 4px; }
-.hero-sub { color: var(--muted); max-width: 68ch; margin: 6px 0 0; }
+.hero-head h1 { font-size: clamp(34px, 4.5vw, 50px); margin-top: 2px; }
+.hero-sub { color: var(--muted); max-width: 72ch; margin: 4px 0 0; font-size: 14.5px; }
 
 /* KPI Strip */
 .kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 .kpi {
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 4px;
-  padding: 16px;
+  padding: 14px 16px;
   display: grid;
-  gap: 8px;
+  gap: 7px;
   align-content: start;
 }
 .kpi-val {
   font-family: var(--display);
-  font-size: 38px;
+  font-size: 34px;
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -155,10 +167,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   align-items: baseline;
   gap: 8px;
 }
-.kpi-val small { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--muted); }
-.kpi-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+.kpi-val small { font-family: var(--mono); font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.kpi-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
 .bar-track { height: 7px; background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; display: flex; }
 .bar-seg { height: 100%; transition: width .35s ease; }
+
+/* Banner */
+.sync-banner {
+  background: color-mix(in srgb, var(--warn) 12%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--rule));
+  border-radius: 4px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.sync-banner[hidden] { display: none; }
+.sync-banner-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* Tabs */
 .tabs {
@@ -168,14 +196,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   flex-wrap: wrap;
 }
 .tab {
-  padding: 10px 16px;
+  padding: 9px 15px;
   border: 1px solid transparent;
   border-bottom: 0;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12.5px;
   border-radius: 4px 4px 0 0;
   position: relative;
   top: 1px;
@@ -201,27 +229,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 4px;
-  padding: 20px;
+  padding: 18px;
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 .panel[hidden] { display: none; }
 
-/* Filters */
+/* Controls */
 .controls {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   align-items: center;
 }
 .controls input[type="search"], .controls select {
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--rule);
   border-radius: 4px;
   background: var(--paper);
   font-size: 13px;
 }
-.controls input[type="search"] { flex: 1; min-width: 200px; }
+.controls input[type="search"] { flex: 1; min-width: 190px; }
 .view-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; margin-left: auto; }
 .view-toggle button { border: 0; background: var(--paper); padding: 6px 11px; font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--muted); }
 .view-toggle button[aria-pressed="true"] { background: var(--signal); color: #fff; }
@@ -230,10 +258,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: 3px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
   border: 1px solid transparent;
@@ -244,65 +272,97 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .sev-low { background: var(--paper); color: var(--muted); border-color: var(--rule); }
 .state-open { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 .state-closed { background: color-mix(in srgb, var(--signal) 14%, transparent); color: var(--signal); border-color: color-mix(in srgb, var(--signal) 35%, transparent); }
+.pr-pill { background: color-mix(in srgb, var(--active) 16%, transparent); color: var(--active); border-color: color-mix(in srgb, var(--active) 40%, transparent); text-decoration: none; }
+.pr-pill:hover { text-decoration: underline; }
 .status-covered { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
 .status-partial { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 .status-planned { background: var(--paper); color: var(--muted); border-color: var(--rule); }
-.tag { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--rule); background: var(--paper); color: var(--muted); }
+.tag { font-family: var(--mono); font-size: 10.5px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--rule); background: var(--paper); color: var(--muted); }
 
-/* Issue Table */
+/* Live Drag-and-Drop Kanban Board */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(235px, 1fr));
+  gap: 12px;
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.lane {
+  background: var(--panel-alt);
+  border: 1px solid var(--rule);
+  border-top: 3px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  min-height: 360px;
+  align-content: start;
+  transition: background .15s, border-color .15s;
+}
+.lane[data-col="urgent"] { border-top-color: var(--crit); }
+.lane[data-col="up-next"] { border-top-color: var(--setpoint); }
+.lane[data-col="backlog"] { border-top-color: var(--signal); }
+.lane[data-col="active"] { border-top-color: var(--active); }
+.lane[data-col="done"] { border-top-color: var(--ok); }
+.lane.drag-over {
+  background: color-mix(in srgb, var(--signal) 10%, var(--panel-alt));
+  border-color: var(--signal);
+  box-shadow: inset 0 0 0 1px var(--signal);
+}
+.lane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.lane-head h3 { font-size: 19px; display: flex; align-items: center; gap: 6px; }
+.lane-hint { font-family: var(--mono); font-size: 10.5px; color: var(--muted); margin-top: -4px; }
+.lane-list { display: grid; gap: 8px; min-height: 80px; align-content: start; }
+
+.kcard {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 10px;
+  display: grid;
+  gap: 7px;
+  cursor: grab;
+  transition: transform .12s, border-color .12s, opacity .12s, box-shadow .12s;
+  user-select: none;
+}
+.kcard:hover { border-color: var(--signal); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.kcard:active { cursor: grabbing; }
+.kcard.dragging { opacity: .45; transform: scale(.98); }
+.kcard.drop-before { border-top: 2px solid var(--signal); }
+.kcard.is-dirty { border-left: 3px solid var(--warn); }
+.kcard-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.kcard-title { font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+.kcard-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.kcard-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--rule);
+}
+.kcard-actions { display: flex; gap: 4px; }
+.issue-num { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+
+/* Table view */
 .table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
-table { border-collapse: collapse; width: 100%; font-size: 14px; }
-th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 tr:last-child td { border-bottom: 0; }
 th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--panel-alt); }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: var(--panel-alt); }
-.issue-num { font-family: var(--mono); font-weight: 600; color: var(--muted); white-space: nowrap; }
-.issue-title { font-weight: 600; color: var(--ink); }
-.issue-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
-
-/* Kanban Board */
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
-  align-items: start;
-}
-.col {
-  background: var(--panel-alt);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
-}
-.col-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--rule);
-}
-.col-head h3 { font-size: 19px; }
-.card {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 11px;
-  display: grid;
-  gap: 8px;
-  cursor: pointer;
-}
-.card:hover { border-color: var(--signal); }
-.card-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.card-title { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
 
 /* BYOX Grid */
-.byox-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-}
+.byox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .byox-card {
   background: var(--panel-alt);
   border: 1px solid var(--rule);
@@ -316,7 +376,7 @@ tbody tr:hover { background: var(--panel-alt); }
 .byox-card.is-partial { border-left: 3px solid var(--warn); background: var(--panel); }
 .byox-head { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
 .byox-head h3 { font-size: 20px; }
-.byox-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.byox-meta { font-family: var(--mono); font-size: 11px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
 .byox-desc { font-size: 13px; color: var(--muted); margin: 0; }
 .byox-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 
@@ -328,45 +388,28 @@ tbody tr:hover { background: var(--panel-alt); }
   border-radius: 4px;
   background: var(--panel-alt);
 }
-.pipe-step {
-  padding: 14px;
-  border-right: 1px solid var(--rule);
-  display: grid;
-  gap: 5px;
-  align-content: start;
-}
+.pipe-step { padding: 14px; border-right: 1px solid var(--rule); display: grid; gap: 5px; align-content: start; }
 .pipe-step:last-child { border-right: 0; }
 .pipe-step strong { font-family: var(--display); font-size: 19px; }
 .pipe-step p { margin: 0; font-size: 12.5px; color: var(--muted); }
 
 /* Pillars */
-.pillars {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.pillar {
-  background: var(--panel-alt);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 18px;
-  display: grid;
-  gap: 10px;
-  align-content: start;
-}
+.pillars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pillar { background: var(--panel-alt); border: 1px solid var(--rule); border-radius: 4px; padding: 16px; display: grid; gap: 9px; align-content: start; }
 .pillar h3 { font-size: 24px; color: var(--signal); }
-.pillar ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+.pillar ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13.5px; }
 
-/* Drawer */
-.drawer-backdrop {
+/* Modals & Drawer */
+.backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 16, 13, 0.55);
+  background: rgba(10, 16, 13, 0.58);
   z-index: 40;
   display: flex;
   justify-content: flex-end;
 }
-.drawer-backdrop[hidden] { display: none; }
+.backdrop.center { justify-content: center; align-items: center; padding: 20px; }
+.backdrop[hidden] { display: none; }
 .drawer {
   width: min(620px, 100%);
   height: 100%;
@@ -375,11 +418,33 @@ tbody tr:hover { background: var(--panel-alt); }
   padding: 24px;
   overflow-y: auto;
   display: grid;
-  gap: 16px;
+  gap: 14px;
   align-content: start;
 }
+.modal {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+}
+.modal label { display: grid; gap: 5px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.modal input, .modal select, .modal textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14px;
+}
+.modal textarea { min-height: 96px; resize: vertical; }
 .drawer-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-.drawer h2 { font-size: 28px; }
+.drawer h2, .modal h2 { font-size: 26px; }
+.move-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 10px; border: 1px solid var(--rule); border-radius: 4px; background: var(--panel-alt); }
 .drawer pre {
   margin: 0;
   padding: 14px;
@@ -390,12 +455,26 @@ tbody tr:hover { background: var(--panel-alt); }
   white-space: pre-wrap;
   word-break: break-word;
 }
-.drawer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 60;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--signal);
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+}
+.toast[hidden] { display: none; }
 
-.empty { text-align: center; padding: 32px 16px; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+.empty { text-align: center; padding: 24px 12px; color: var(--muted); font-family: var(--mono); font-size: 12px; }
 footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 
-@media (max-width: 960px) {
+@media (max-width: 1020px) {
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pipeline-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pipe-step { border-right: 0; border-bottom: 1px solid var(--rule); }
@@ -411,15 +490,17 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
   <div class="topbar-inner">
     <div class="brand-group">
       <a class="topbar-brand" href="./index.html">tutor</a>
-      <span class="sync-pill" id="sync-status">Loading snapshot…</span>
+      <span class="sync-pill" id="sync-status">Connecting…</span>
+      <span class="sync-pill" id="auth-status">Read-only</span>
     </div>
     <div class="topbar-actions">
-      <a href="./index.html">Overview</a>
-      <a href="./dashboard.html" aria-current="page">Mission Control</a>
-      <a href="https://github.com/Supragy352/tutor/issues" target="_blank" rel="noopener">GitHub Issues</a>
-      <a href="https://github.com/Supragy352/tutor/actions" target="_blank" rel="noopener">Actions</a>
-      <button type="button" class="btn small" id="btn-sync">↻ Sync GitHub</button>
-      <button type="button" class="btn small" id="btn-theme" title="Toggle light/dark theme">◐ Theme</button>
+      <a class="nav-link" href="./index.html">Overview</a>
+      <a class="nav-link" href="./dashboard.html" aria-current="page">Kanban Mission Control</a>
+      <a class="nav-link" href="https://github.com/Supragy352/tutor/pulls" target="_blank" rel="noopener">PRs</a>
+      <button type="button" class="btn small" id="btn-auth">🔑 GitHub Sync</button>
+      <button type="button" class="btn small" id="btn-auto" aria-pressed="true" title="Auto-sync every 30s">● Auto 30s</button>
+      <button type="button" class="btn small" id="btn-sync">↻ Sync</button>
+      <button type="button" class="btn small" id="btn-theme" title="Toggle light/dark theme">◐</button>
     </div>
   </div>
 </nav>
@@ -427,22 +508,28 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
 <main class="page">
   <header class="hero-head">
     <div>
-      <span class="label">Supragy352/tutor · Engineering Tracker</span>
-      <h1>Mission Control</h1>
-      <p class="hero-sub">Live tracker for open issues, CI/CD builds &amp; deployments, strategic tracks (Design, Reasoning, Course Structure), and complete coverage of <code>codecrafters-io/build-your-own-x</code>.</p>
+      <span class="label">Supragy352/tutor · Live Agent Dispatch Board</span>
+      <h1>Kanban Mission Control</h1>
+      <p class="hero-sub">Drag tasks into <strong>Urgent</strong> to prioritize what agents tackle next. With a GitHub token connected, every drag immediately updates live <code>priority:urgent</code> / <code>priority:high</code> / <code>status:*</code> labels on GitHub so agents pick up your exact order.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <a class="btn primary" href="https://github.com/Supragy352/tutor/issues/new" target="_blank" rel="noopener">+ New Issue</a>
-      <a class="btn" href="https://github.com/codecrafters-io/build-your-own-x" target="_blank" rel="noopener">Build Your Own X ↗</a>
+      <button type="button" class="btn urgent" id="btn-copy-urgent">🚀 Copy Urgent Queue for Agent</button>
+      <button type="button" class="btn primary" id="btn-add-task">+ Add Task</button>
     </div>
   </header>
 
   <section class="kpis" aria-label="Summary metrics">
     <article class="kpi">
-      <span class="label">Issues</span>
-      <div class="kpi-val"><span id="kpi-open">—</span> <small id="kpi-closed">— closed</small></div>
-      <div class="bar-track" id="kpi-sev-bar" aria-label="Severity distribution"></div>
-      <div class="kpi-meta" id="kpi-sev-meta"></div>
+      <span class="label">Urgent Queue</span>
+      <div class="kpi-val"><span id="kpi-urgent" style="color:var(--crit)">0</span> <small id="kpi-upnext">0 up next</small></div>
+      <div class="kpi-meta" id="kpi-urgent-meta">Drag cards to Urgent for immediate agent pickup</div>
+    </article>
+
+    <article class="kpi">
+      <span class="label">Issues &amp; PRs</span>
+      <div class="kpi-val"><span id="kpi-open">—</span> <small id="kpi-closed">— done</small></div>
+      <div class="bar-track" id="kpi-sev-bar" aria-label="Column distribution"></div>
+      <div class="kpi-meta" id="kpi-prs-meta">Checking open PRs…</div>
     </article>
 
     <article class="kpi">
@@ -455,36 +542,30 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
       <span class="label">Build Your Own X Coverage</span>
       <div class="kpi-val"><span id="kpi-byox-pct">—</span> <small id="kpi-byox-count">of 30 categories</small></div>
       <div class="bar-track" id="kpi-byox-bar" aria-label="Build your own X coverage"></div>
-      <div class="kpi-meta" id="kpi-byox-meta"></div>
-    </article>
-
-    <article class="kpi">
-      <span class="label">Bundled Courses</span>
-      <div class="kpi-val">3 <small>35 verified stages</small></div>
-      <div class="kpi-meta">
-        <span><code>wc</code> (3)</span>
-        <span><code>pid</code> (8)</span>
-        <span><code>rl</code> (24)</span>
-      </div>
+      <div class="kpi-meta">+ bonus Control Systems (<code>challenges/pid</code>)</div>
     </article>
   </section>
 
+  <div class="sync-banner" id="local-banner" hidden>
+    <span id="local-banner-text">You have local board moves not yet written to GitHub. Connect a GitHub token for live two-way sync, or copy the commands/prompt below.</span>
+    <div class="sync-banner-actions">
+      <button type="button" class="btn small primary" id="btn-connect-from-banner">🔑 Connect Token</button>
+      <button type="button" class="btn small" id="btn-copy-gh">⌨ Copy gh Sync Commands</button>
+      <button type="button" class="btn small" id="btn-reset-local">↺ Reset Local Moves</button>
+    </div>
+  </div>
+
   <div class="tabs" role="tablist" aria-label="Dashboard views">
-    <button type="button" class="tab" role="tab" id="tab-issues" aria-controls="panel-issues" aria-selected="true">Issues <span class="count" id="cnt-issues">0</span></button>
+    <button type="button" class="tab" role="tab" id="tab-issues" aria-controls="panel-issues" aria-selected="true">Kanban Board <span class="count" id="cnt-issues">0</span></button>
     <button type="button" class="tab" role="tab" id="tab-byox" aria-controls="panel-byox" aria-selected="false">Build Your Own X <span class="count" id="cnt-byox">30</span></button>
     <button type="button" class="tab" role="tab" id="tab-cicd" aria-controls="panel-cicd" aria-selected="false">CI/CD &amp; Deploy <span class="count" id="cnt-runs">0</span></button>
     <button type="button" class="tab" role="tab" id="tab-roadmap" aria-controls="panel-roadmap" aria-selected="false">Design · Reasoning · Courses</button>
   </div>
 
-  <!-- TAB 1: ISSUES -->
+  <!-- TAB 1: LIVE KANBAN BOARD & TABLE -->
   <section class="panel" id="panel-issues" role="tabpanel" aria-labelledby="tab-issues">
     <div class="controls">
-      <input type="search" id="f-search" placeholder="Search issues by title, #number, file, or keyword…" aria-label="Search issues">
-      <select id="f-state" aria-label="Filter by state">
-        <option value="open" selected>Open</option>
-        <option value="closed">Closed</option>
-        <option value="all">All states</option>
-      </select>
+      <input type="search" id="f-search" placeholder="Search cards by title, #number, file, or keyword…" aria-label="Search issues">
       <select id="f-sev" aria-label="Filter by severity">
         <option value="all">All severities</option>
         <option value="critical">Critical</option>
@@ -501,8 +582,8 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
         <option value="CI/CD & Deploy">CI/CD &amp; Deploy</option>
       </select>
       <div class="view-toggle" role="group" aria-label="Issue layout">
-        <button type="button" id="view-table" aria-pressed="true">Table</button>
-        <button type="button" id="view-board" aria-pressed="false">Board</button>
+        <button type="button" id="view-board" aria-pressed="true">Kanban</button>
+        <button type="button" id="view-table" aria-pressed="false">Table</button>
       </div>
     </div>
     <div id="issues-container"></div>
@@ -539,7 +620,7 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
     <div class="pipeline-flow">
       <div class="pipe-step"><span class="label">01 · Format</span><strong>cargo fmt</strong><p>Enforces Rust formatting across <code>src/</code> on every push &amp; PR.</p></div>
       <div class="pipe-step"><span class="label">02 · Lint</span><strong>clippy -D</strong><p>Zero-warning lint pass on <code>--all-targets --locked</code>.</p></div>
-      <div class="pipe-step"><span class="label">03 · Build</span><strong>Ubuntu + Win</strong><p>Compiles locked release/dev targets on Linux and Windows runners.</p></div>
+      <div class="pipe-step"><span class="label">03 · Build</span><strong>Ubuntu + Win</strong><p>Compiles locked targets on Linux and Windows runners.</p></div>
       <div class="pipe-step"><span class="label">04 · Verify</span><strong>35 Stages</strong><p>Runs <code>wc</code>, <code>pid</code>, and <code>rl</code> reference solutions with <code>TUTOR_LLM=off</code>.</p></div>
       <div class="pipe-step"><span class="label">05 · Docs Check</span><strong>HTML5 Gate</strong><p>Verifies doctype, UTF-8 charset, and viewport meta on <code>docs/</code>.</p></div>
       <div class="pipe-step"><span class="label">06 · Deploy</span><strong>GitHub Pages</strong><p>Publishes <code>docs/index.html</code> &amp; <code>dashboard.html</code> on push to <code>main</code>.</p></div>
@@ -572,7 +653,7 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
         <h3>Configurable Multi-Tier AI Tutor</h3>
         <ul>
           <li>Decouple from Ollama/Claude-only lock-in: support OpenAI-compatible <code>/v1/chat/completions</code> endpoints and configurable CLI tutor commands.</li>
-          <li>Make reasoning/thinking token modes explicit and configurable (instead of hardcoded <code>"think": false</code>), separating fast diff feedback from deep Socratic hints.</li>
+          <li>Make reasoning/thinking token modes explicit and configurable (moving off hardcoded <code>"think": false</code>), separating fast diff feedback from deep Socratic hints.</li>
           <li>Feed uncommitted diffs (<code>git diff HEAD</code>), exit statuses, and persisted hint history so reasoning models never review stale code.</li>
         </ul>
       </article>
@@ -589,10 +670,10 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
         <span class="label">Track 04 · Build Your Own X</span>
         <h3>30/30 Category Coverage Roadmap</h3>
         <ul>
-          <li><strong>Wave 1 (stdin/stdout):</strong> Regex Engine, Programming Language (Lisp/Interpreter), Template Engine, Search Engine, Blockchain, Memory Allocator, AI Model (Transformer).</li>
+          <li><strong>Wave 1 (stdin/stdout):</strong> Regex Engine, Programming Language, Template Engine, Search Engine, Blockchain, Memory Allocator, AI Model (Transformer).</li>
           <li><strong>Wave 2 (Filesystem &amp; CLI):</strong> Git, Database (SQLite/LSM-tree), Shell, Text Editor, Emulator/VM.</li>
           <li><strong>Wave 3 (Network &amp; Distributed):</strong> Web Server (HTTP), BitTorrent Client, Distributed Systems (Raft/KV), Network Stack (TCP/IP), Bot.</li>
-          <li><strong>Wave 4 (Systems &amp; Visual):</strong> Docker (Namespaces), OS, Processor, 3D Renderer, Physics Engine, Voxel Engine, Game, Visual Recognition, AR, Web Browser, Front-end Framework.</li>
+          <li><strong>Wave 4 (Systems &amp; Visual):</strong> Docker, OS, Processor, 3D Renderer, Physics Engine, Voxel Engine, Game, Visual Recognition, AR, Web Browser, Front-end Framework.</li>
         </ul>
       </article>
     </div>
@@ -600,56 +681,139 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
 
   <footer>
     <span>Repository: <a href="https://github.com/Supragy352/tutor" target="_blank" rel="noopener">Supragy352/tutor</a> · Agent Spec: <a href="https://github.com/Supragy352/tutor/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a></span>
-    <span id="footer-note">Powered by GitHub REST API with local snapshot fallback.</span>
+    <span>Kanban columns sync via GitHub labels: <code>priority:urgent</code>, <code>priority:high</code>, <code>priority:normal</code>, <code>status:in-progress</code>, <code>status:in-review</code></span>
   </footer>
 </main>
 
 <!-- ISSUE DETAIL DRAWER -->
-<div class="drawer-backdrop" id="drawer-backdrop" hidden>
+<div class="backdrop" id="drawer-backdrop" hidden>
   <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
     <div class="drawer-head">
       <div>
-        <div class="issue-tags" id="drawer-badges"></div>
+        <div class="kcard-tags" id="drawer-badges"></div>
         <h2 id="drawer-title" style="margin-top:8px"></h2>
       </div>
       <button type="button" class="btn small" id="drawer-close" aria-label="Close issue details">✕ Close</button>
     </div>
-    <div class="drawer-actions">
+    <div class="move-bar" id="drawer-move-bar">
+      <span class="label" style="margin-right:4px">Move to:</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
       <a class="btn primary small" id="drawer-gh" href="#" target="_blank" rel="noopener">Open on GitHub ↗</a>
-      <button type="button" class="btn small" id="drawer-copy-prompt">Copy Agent Prompt</button>
+      <button type="button" class="btn small" id="drawer-copy-prompt">📋 Copy Agent Prompt</button>
     </div>
     <pre id="drawer-body"></pre>
   </aside>
 </div>
 
+<!-- GITHUB TOKEN MODAL -->
+<div class="backdrop center" id="auth-backdrop" hidden>
+  <form class="modal" id="auth-form" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="drawer-head">
+      <h2 id="auth-title">Connect GitHub for Live Two-Way Kanban</h2>
+      <button type="button" class="btn small" id="auth-close">✕</button>
+    </div>
+    <p style="margin:0;font-size:13.5px;color:var(--muted)">
+      Paste a GitHub Fine-Grained Personal Access Token with <strong>Issues: Read &amp; Write</strong> on <code>Supragy352/tutor</code>.
+      It is stored <strong>only in this browser's localStorage</strong> and sent directly to <code>api.github.com</code>.
+      When connected, every card drag immediately updates GitHub labels so agents see your Urgent queue live.
+    </p>
+    <label>
+      GitHub Personal Access Token
+      <input type="password" id="auth-token-input" placeholder="github_pat_..." autocomplete="off">
+    </label>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn small" id="auth-clear">Disconnect</button>
+      <div style="display:flex;gap:8px">
+        <a class="btn small" href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create Token ↗</a>
+        <button type="submit" class="btn primary small">Save &amp; Sync</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- ADD TASK MODAL -->
+<div class="backdrop center" id="add-backdrop" hidden>
+  <form class="modal" id="add-form" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="drawer-head">
+      <h2 id="add-title">Add Task to Kanban Board</h2>
+      <button type="button" class="btn small" id="add-close">✕</button>
+    </div>
+    <label>
+      Task Title
+      <input type="text" id="add-task-title" required placeholder="e.g. Support OpenAI-compatible review endpoints">
+    </label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label>
+        Column / Urgency
+        <select id="add-task-col">
+          <option value="urgent" selected>🔥 Urgent (Do First)</option>
+          <option value="up-next">📌 Up Next (High)</option>
+          <option value="backlog">📥 Backlog</option>
+        </select>
+      </label>
+      <label>
+        Label
+        <select id="add-task-label">
+          <option value="enhancement">enhancement</option>
+          <option value="bug">bug</option>
+          <option value="documentation">documentation</option>
+          <option value="accessibility">accessibility</option>
+        </select>
+      </label>
+    </div>
+    <label>
+      Details / Acceptance Criteria
+      <textarea id="add-task-body" placeholder="Describe the goal and acceptance criteria for the agent…"></textarea>
+    </label>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button type="button" class="btn small" id="add-cancel">Cancel</button>
+      <button type="submit" class="btn primary small" id="add-submit">Create Issue</button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
 <script>
 const REPO = "Supragy352/tutor";
+const LS_TOKEN = "tutor_gh_pat";
+const LS_OVERRIDES = "tutor_kanban_overrides_v1";
+const LS_ORDER = "tutor_kanban_order_v1";
+const LS_THEME = "tutor_docs_theme";
 
-// Embedded fallback snapshot of the 20 GitHub issues so the dashboard works offline or when rate-limited.
+const COLUMNS = [
+  { id: "urgent", title: "🔥 Urgent", hint: "Agents pick these up first", label: "priority:urgent" },
+  { id: "up-next", title: "📌 Up Next", hint: "Queued high-priority tasks", label: "priority:high" },
+  { id: "backlog", title: "📥 Backlog", hint: "Planned & lower urgency", label: "priority:normal" },
+  { id: "active", title: "⚡ Active / PR", hint: "In progress or PR open", label: "status:in-progress" },
+  { id: "done", title: "✅ Done", hint: "Closed / merged", label: null }
+];
+const LANE_LABELS = new Set(["priority:urgent", "priority:high", "priority:normal", "status:in-progress", "status:in-review"]);
+
 const FALLBACK_ISSUES = [
-  { number: 1, state: "open", title: "Child process execution has no timeout and can deadlock on OS pipe buffers", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/1", body: "### Severity\n**Critical**\n\n### Affected Files\n- src/main.rs (build_and_run, run_test, claude)\n\n### Acceptance Criteria\n- [ ] Write stdin in a background thread so EOF is delivered while stdout/stderr drain concurrently.\n- [ ] Add configurable per-test timeout (default 30s, TUTOR_TIMEOUT env var) with child.kill() + wait().\n- [ ] Add unit tests covering large pipe I/O and timeouts." },
-  { number: 2, state: "open", title: "run_test ignores child exit status (crashing programs pass if stdout matches)", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/2", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (run_test lines 325-345)\n\n### Acceptance Criteria\n- [ ] Require out.status.success() && matches(&got, &t.expect).\n- [ ] Include exit status in failure report.\n- [ ] Add unit test for crashing child with matching stdout." },
-  { number: 3, state: "open", title: "Naive split_whitespace() command splitting breaks paths with spaces and quoted arguments", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/3", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (main, build_and_run, run_test)\n\n### Acceptance Criteria\n- [ ] Use quote-aware command splitting (e.g. shlex or custom parser).\n- [ ] Preserve argument boundaries in tutor init.\n- [ ] Add unit tests for paths with spaces and quoted flags." },
-  { number: 4, state: "open", title: "Non-atomic tutor.toml writes in save() cause race conditions with tutor serve polling", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/4", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (load / save lines 120-129)\n\n### Acceptance Criteria\n- [ ] Write tutor.toml via temp file + atomic fs::rename.\n- [ ] Add save/load round-trip unit test." },
-  { number: 5, state: "open", title: "CLI argument parser bugs: --build fallthrough, flag positions, --help exit code, and slug path traversal", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/5", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (main, new)\n\n### Acceptance Criteria\n- [ ] Reject --build with missing run command.\n- [ ] Support -v/--verbose, -h/--help (exit 0), -V/--version cleanly (e.g. clap).\n- [ ] Validate slug in tutor new to block path traversal and clean up empty dirs on failure." },
-  { number: 6, state: "open", title: "Git hook installation issues on Windows (\\\\?\\ verbatim prefix), worktrees, and missing .git/hooks", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/6", body: "### Severity\n**Medium**\n\n### Affected Files\n- src/main.rs (init, install_hook)\n\n### Acceptance Criteria\n- [ ] Strip \\\\?\\ prefix on Windows canonicalized paths.\n- [ ] Ensure .git/hooks exists and single-quote exe path in #!/bin/sh." },
-  { number: 7, state: "open", title: "claude() fails to capture stderr and exits early on BrokenPipe before reading exit error", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/7", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (escalate, claude)\n\n### Acceptance Criteria\n- [ ] Pipe stderr in claude().\n- [ ] Ignore stdin BrokenPipe so wait_with_output() always reaps child and captures stderr.\n- [ ] Include both stderr and stdout in returned errors." },
-  { number: 8, state: "open", title: "last_commit_diff() reviews stale HEAD on uncommitted runs and includes tutor.toml noise", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/8", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (last_commit_diff, review)\n\n### Acceptance Criteria\n- [ ] Check git diff HEAD first (excluding tutor.toml) before falling back to git show HEAD.\n- [ ] Append truncation marker beyond 12,000 chars.\n- [ ] Normalize TUTOR_LLM URL trailing slash and case-insensitive 'off'." },
-  { number: 9, state: "open", title: "current_hint() discards hints instead of saving to tutor.toml, and failed escalation pollutes LastRun.hint", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/9", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (check, current_hint), src/web/index.html\n\n### Acceptance Criteria\n- [ ] Persist current_hint() output into p.last in tutor.toml.\n- [ ] Keep hint = None when auto-escalation fails instead of storing error string in LastRun.hint." },
-  { number: 10, state: "open", title: "HTTP server handle() lacks socket read/write timeouts, X-Tutor check on /api/state, and completed-course handling in web_test()", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/10", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (handle, web_test)\n\n### Acceptance Criteria\n- [ ] Set read/write timeouts on TcpStream in handle().\n- [ ] Require X-Tutor header on GET /api/state and add Cache-Control: no-store.\n- [ ] Handle already-finished courses gracefully in web_test()." },
-  { number: 11, state: "open", title: "Interactive PID simulator in docs/index.html violates Stage 5 anti-windup specification", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/11", body: "### Severity\n**High**\n\n### Affected Files\n- docs/index.html (lines 260-278)\n\n### Acceptance Criteria\n- [ ] Add error-sign check ((u_tent > hi && e > 0) || (u_tent < lo && e < 0)) and recompute u with kept integral before clamping." },
-  { number: 12, state: "open", title: "docs/index.html renders in browser Quirks Mode and lacks <meta charset='utf-8'> and viewport meta tag", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/12", body: "### Severity\n**Medium**\n\n### Affected Files\n- docs/index.html\n\n### Acceptance Criteria\n- [ ] Add <!doctype html>, <html lang='en'>, <head>, <meta charset='utf-8'>, viewport meta, and body { margin: 0; }." },
-  { number: 13, state: "open", title: "Web dashboard stage selection context and accessibility fixes in src/web/index.html", labels: [{ name: "bug" }, { name: "accessibility" }], html_url: "https://github.com/Supragy352/tutor/issues/13", body: "### Severity\n**Medium**\n\n### Affected Files\n- src/web/index.html\n\n### Acceptance Criteria\n- [ ] Scope rendered hints/reviews to selected stage or label them clearly.\n- [ ] Add aria-valuemin/max/now to progressbar and fix aria-current on nav buttons." },
-  { number: 14, state: "open", title: "Harden CI workflow with TUTOR_LLM=off, rustfmt check, and clippy lint check", labels: [{ name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/14", body: "### Severity\n**Medium**\n\n### Affected Files\n- .github/workflows/ci.yml\n\n### Acceptance Criteria\n- [ ] Add TUTOR_LLM: off env var.\n- [ ] Add cargo fmt --check and cargo clippy --all-targets --locked -- -D warnings." },
-  { number: 15, state: "open", title: "Fix off-by-one stage numbers in challenges/rl/reference/main.py section comments", labels: [{ name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/15", body: "### Severity\n**Low**\n\n### Affected Files\n- challenges/rl/reference/main.py\n\n### Acceptance Criteria\n- [ ] Align section comments with stages 1-24 in challenges/rl/challenge.toml." },
-  { number: 16, state: "open", title: "Use separate evaluation environment in RL reference solution (DQN Stage 16 & PPO Stages 21-22) and clarify eval RNG lifetime", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/16", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/reference/main.py, challenges/rl/challenge.toml\n\n### Acceptance Criteria\n- [ ] Evaluate on a separate env instance in cmd_dqn and ppo.\n- [ ] Clarify single eval_rng lifetime in Stage 10." },
-  { number: 17, state: "open", title: "Clarify batch-mean gradient scaling in RL Stage 12 (Backprop/SGD) and clipped gradient tie rule in Stage 21 (PPO)", labels: [{ name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/17", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/challenge.toml\n\n### Acceptance Criteria\n- [ ] Document dividing output-layer gradient by batch size N in Stage 12.\n- [ ] Explicitly specify <= tie rule for unclipped PPO gradient in Stage 21." },
-  { number: 18, state: "open", title: "Prevent numerical underflow (log(0) / 0 * -inf = NaN) in Categorical policy (RL Stage 17)", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/18", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/reference/main.py\n\n### Acceptance Criteria\n- [ ] Use log-sum-exp for log_p and avoid 0 * -inf in entropy." },
-  { number: 19, state: "open", title: "Add missing edge-case tests in challenges/wc and challenges/pid Stage 5 anti-windup", labels: [{ name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/19", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/wc/challenge.toml, challenges/pid/challenge.toml\n\n### Acceptance Criteria\n- [ ] Add non-newline final line & empty/tab word count tests to wc.\n- [ ] Add PI-only saturation unwinding test cases to pid Stage 5." },
-  { number: 20, state: "open", title: "Clarify single-line output formatting in RL Stages 6-9, validate empty challenges in read_challenge, and update .gitignore", labels: [{ name: "documentation" }, { name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/20", body: "### Severity\n**Low**\n\n### Affected Files\n- challenges/rl/challenge.toml, src/main.rs, .gitignore\n\n### Acceptance Criteria\n- [ ] Clarify single-line space-separated output in RL Stages 6-9.\n- [ ] Validate non-empty stages/tests in read_challenge().\n- [ ] Update .gitignore." }
+  { number: 1, state: "open", title: "Child process execution has no timeout and can deadlock on OS pipe buffers", labels: [{ name: "bug" }, { name: "priority:urgent" }], html_url: "https://github.com/Supragy352/tutor/issues/1", body: "### Severity\n**Critical**\n\nWrite stdin in background thread and add configurable per-test timeout." },
+  { number: 2, state: "open", title: "run_test ignores child exit status (crashing programs pass if stdout matches)", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/2", body: "### Severity\n**High**\n\nRequire out.status.success() in run_test." },
+  { number: 3, state: "open", title: "Naive split_whitespace() command splitting breaks paths with spaces and quoted arguments", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/3", body: "### Severity\n**High**\n\nUse quote-aware command splitting." },
+  { number: 4, state: "open", title: "Non-atomic tutor.toml writes in save() cause race conditions with tutor serve polling", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/4", body: "### Severity\n**High**\n\nWrite tutor.toml via temp file + atomic fs::rename." },
+  { number: 5, state: "open", title: "CLI argument parser bugs: --build fallthrough, flag positions, --help exit code, and slug path traversal", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/5", body: "### Severity\n**High**\n\nFix CLI parsing and validate slug in tutor new." },
+  { number: 6, state: "open", title: "Git hook installation issues on Windows (\\\\?\\ verbatim prefix), worktrees, and missing .git/hooks", labels: [{ name: "bug" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/6", body: "### Severity\n**Medium**\n\nStrip \\\\?\\ prefix and create .git/hooks." },
+  { number: 7, state: "open", title: "claude() fails to capture stderr and exits early on BrokenPipe before reading exit error", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/7", body: "### Severity\n**High**\n\nPipe stderr and reap child cleanly." },
+  { number: 8, state: "open", title: "last_commit_diff() reviews stale HEAD on uncommitted runs and includes tutor.toml noise", labels: [{ name: "bug" }, { name: "priority:high" }], html_url: "https://github.com/Supragy352/tutor/issues/8", body: "### Severity\n**High**\n\nCheck git diff HEAD first and exclude tutor.toml." },
+  { number: 9, state: "open", title: "current_hint() discards hints instead of saving to tutor.toml, and failed escalation pollutes LastRun.hint", labels: [{ name: "bug" }, { name: "status:in-review" }], html_url: "https://github.com/Supragy352/tutor/issues/9", body: "### Severity\n**High**\n\nPersist hints in tutor.toml (PR #23)." },
+  { number: 10, state: "open", title: "HTTP server handle() lacks socket read/write timeouts, X-Tutor check on /api/state, and completed-course handling in web_test()", labels: [{ name: "bug" }, { name: "status:in-review" }], html_url: "https://github.com/Supragy352/tutor/issues/10", body: "### Severity\n**High**\n\nHarden tutor serve HTTP handling (PR #23)." },
+  { number: 11, state: "open", title: "Interactive PID simulator in docs/index.html violates Stage 5 anti-windup specification", labels: [{ name: "bug" }, { name: "documentation" }, { name: "status:in-review" }], html_url: "https://github.com/Supragy352/tutor/issues/11", body: "### Severity\n**High**\n\nMatch Stage 5 anti-windup spec (PR #21)." },
+  { number: 12, state: "closed", title: "docs/index.html renders in browser Quirks Mode and lacks <meta charset='utf-8'> and viewport meta tag", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/12", body: "### Severity\n**Medium**\n\nFixed in 2fce24b." },
+  { number: 13, state: "open", title: "Web dashboard stage selection context and accessibility fixes in src/web/index.html", labels: [{ name: "bug" }, { name: "accessibility" }, { name: "status:in-review" }], html_url: "https://github.com/Supragy352/tutor/issues/13", body: "### Severity\n**Medium**\n\nRedesigned learner cockpit (PR #22)." },
+  { number: 14, state: "closed", title: "Harden CI workflow with TUTOR_LLM=off, rustfmt check, and clippy lint check", labels: [{ name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/14", body: "### Severity\n**Medium**\n\nFixed in 2fce24b." },
+  { number: 15, state: "open", title: "Fix off-by-one stage numbers in challenges/rl/reference/main.py section comments", labels: [{ name: "documentation" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/15", body: "### Severity\n**Low**" },
+  { number: 16, state: "open", title: "Use separate evaluation environment in RL reference solution (DQN Stage 16 & PPO Stages 21-22) and clarify eval RNG lifetime", labels: [{ name: "bug" }, { name: "documentation" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/16", body: "### Severity\n**Medium**" },
+  { number: 17, state: "open", title: "Clarify batch-mean gradient scaling in RL Stage 12 (Backprop/SGD) and clipped gradient tie rule in Stage 21 (PPO)", labels: [{ name: "documentation" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/17", body: "### Severity\n**Medium**" },
+  { number: 18, state: "open", title: "Prevent numerical underflow (log(0) / 0 * -inf = NaN) in Categorical policy (RL Stage 17)", labels: [{ name: "bug" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/18", body: "### Severity\n**Medium**" },
+  { number: 19, state: "open", title: "Add missing edge-case tests in challenges/wc and challenges/pid Stage 5 anti-windup", labels: [{ name: "enhancement" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/19", body: "### Severity\n**Medium**" },
+  { number: 20, state: "open", title: "Clarify single-line output formatting in RL Stages 6-9, validate empty challenges in read_challenge, and update .gitignore", labels: [{ name: "documentation" }, { name: "enhancement" }, { name: "priority:normal" }], html_url: "https://github.com/Supragy352/tutor/issues/20", body: "### Severity\n**Low**" }
 ];
 
-// Complete 30-category catalog from https://github.com/codecrafters-io/build-your-own-x
 const BYOX_CATEGORIES = [
   { name: "3D Renderer", status: "planned", course: "challenges/renderer", stages: "8–10 planned", harness: "Graphics / Binary / Hardware", desc: "Software rasterizer or raytracer outputting deterministic PPM/PNG frames and depth buffers." },
   { name: "AI Model", status: "partial", course: "challenges/rl (DQN/PPO) + challenges/llm (planned)", stages: "24 built · Transformer planned", harness: "stdin/stdout", desc: "RL models (DQN, PPO) covered in challenges/rl; dedicated GPT/Transformer from scratch planned." },
@@ -684,9 +848,36 @@ const BYOX_CATEGORIES = [
 ];
 
 let issues = FALLBACK_ISSUES;
+let openPRs = [];
+let prByIssue = new Map();
 let runs = [];
-let viewMode = "table";
+let viewMode = "board";
 let activeIssue = null;
+let draggedNum = null;
+let autoPoll = true;
+let pollTimer = null;
+
+function getToken() { return localStorage.getItem(LS_TOKEN) || ""; }
+function getOverrides() { try { return JSON.parse(localStorage.getItem(LS_OVERRIDES) || "{}"); } catch { return {}; } }
+function saveOverrides(o) { localStorage.setItem(LS_OVERRIDES, JSON.stringify(o)); }
+function getOrder() { try { return JSON.parse(localStorage.getItem(LS_ORDER) || "{}"); } catch { return {}; } }
+function saveOrder(o) { localStorage.setItem(LS_ORDER, JSON.stringify(o)); }
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.hidden = true; }, 2800);
+}
+
+function ghHeaders(json = false) {
+  const h = { Accept: "application/vnd.github+json" };
+  const tok = getToken();
+  if (tok) h.Authorization = `Bearer ${tok}`;
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
 
 function classifySeverity(issue) {
   const b = (issue.body || "").toLowerCase();
@@ -706,6 +897,26 @@ function classifyTrack(issue) {
   return "Core Runner";
 }
 
+function remoteColumn(issue) {
+  if (issue.state === "closed") return "done";
+  const names = new Set((issue.labels || []).map(l => l.name));
+  if (names.has("status:in-progress") || names.has("status:in-review") || prByIssue.has(issue.number)) return "active";
+  if (names.has("priority:urgent")) return "urgent";
+  if (names.has("priority:high")) return "up-next";
+  return "backlog";
+}
+
+function issueColumn(issue) {
+  const ov = getOverrides();
+  if (ov[issue.number]) return ov[issue.number];
+  return remoteColumn(issue);
+}
+
+function isDirty(issue) {
+  const ov = getOverrides();
+  return Boolean(ov[issue.number] && ov[issue.number] !== remoteColumn(issue));
+}
+
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -720,114 +931,327 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function renderKPIs() {
-  const open = issues.filter(i => i.state === "open");
-  const closed = issues.filter(i => i.state === "closed");
-  document.getElementById("kpi-open").textContent = `${open.length} open`;
-  document.getElementById("kpi-closed").textContent = `${closed.length} closed`;
-  document.getElementById("cnt-issues").textContent = open.length;
+function updateAuthBadge() {
+  const badge = document.getElementById("auth-status");
+  if (getToken()) {
+    badge.textContent = "Write-enabled ✓";
+    badge.classList.add("writable");
+  } else {
+    badge.textContent = "Read-only (local drag)";
+    badge.classList.remove("writable");
+  }
+}
 
-  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
-  for (const i of open) counts[classifySeverity(i)]++;
-  const totalOpen = Math.max(open.length, 1);
-  const colors = { critical: "var(--crit)", high: "var(--setpoint)", medium: "var(--warn)", low: "var(--muted)" };
-  const bar = document.getElementById("kpi-sev-bar");
-  bar.replaceChildren(...Object.entries(counts).map(([k, v]) =>
-    el("div", { class: "bar-seg", style: `width:${(100 * v / totalOpen).toFixed(1)}%;background:${colors[k]}`, title: `${k}: ${v}` })
-  ));
-  document.getElementById("kpi-sev-meta").replaceChildren(
-    ...Object.entries(counts).map(([k, v]) => el("span", { text: `${k}: ${v}` }))
+function updateLocalBanner() {
+  const dirty = issues.filter(isDirty);
+  const banner = document.getElementById("local-banner");
+  if (!dirty.length) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  document.getElementById("local-banner-text").textContent =
+    `${dirty.length} local card move${dirty.length === 1 ? "" : "s"} saved in this browser. Connect a GitHub token to sync live, or copy gh commands / Urgent prompt.`;
+}
+
+function renderKPIs() {
+  const byCol = { urgent: 0, "up-next": 0, backlog: 0, active: 0, done: 0 };
+  for (const i of issues) byCol[issueColumn(i)]++;
+  const openCount = issues.length - byCol.done;
+
+  document.getElementById("kpi-urgent").textContent = String(byCol.urgent);
+  document.getElementById("kpi-upnext").textContent = `${byCol["up-next"]} up next`;
+  const urgentItems = sortInColumn(issues.filter(i => issueColumn(i) === "urgent"), "urgent");
+  document.getElementById("kpi-urgent-meta").textContent = urgentItems.length
+    ? `Top urgent: #${urgentItems[0].number} ${urgentItems[0].title.slice(0, 42)}${urgentItems[0].title.length > 42 ? "…" : ""}`
+    : "No urgent items — drag any card into Urgent";
+
+  document.getElementById("kpi-open").textContent = `${openCount} open`;
+  document.getElementById("kpi-closed").textContent = `${byCol.done} done`;
+  document.getElementById("cnt-issues").textContent = openCount;
+  document.getElementById("kpi-prs-meta").textContent = `${openPRs.length} open PR${openPRs.length === 1 ? "" : "s"} · ${byCol.active} active`;
+
+  const total = Math.max(issues.length, 1);
+  const colors = { urgent: "var(--crit)", "up-next": "var(--setpoint)", backlog: "var(--signal)", active: "var(--active)", done: "var(--ok)" };
+  document.getElementById("kpi-sev-bar").replaceChildren(
+    ...Object.entries(byCol).map(([k, v]) =>
+      el("div", { class: "bar-seg", style: `width:${(100 * v / total).toFixed(1)}%;background:${colors[k]}`, title: `${k}: ${v}` })
+    )
   );
 
-  // BYOX KPI
   const covered = BYOX_CATEGORIES.filter(c => c.status === "covered").length;
   const partial = BYOX_CATEGORIES.filter(c => c.status === "partial").length;
-  const total = BYOX_CATEGORIES.length;
-  const pct = Math.round(((covered + partial * 0.5) / total) * 100);
+  const bTotal = BYOX_CATEGORIES.length;
+  const pct = Math.round(((covered + partial * 0.5) / bTotal) * 100);
   document.getElementById("kpi-byox-pct").textContent = `${pct}%`;
-  document.getElementById("kpi-byox-count").textContent = `${covered} full · ${partial} partial / ${total}`;
+  document.getElementById("kpi-byox-count").textContent = `${covered} full · ${partial} partial / ${bTotal}`;
   document.getElementById("kpi-byox-bar").replaceChildren(
-    el("div", { class: "bar-seg", style: `width:${(100 * covered / total).toFixed(1)}%;background:var(--ok)` }),
-    el("div", { class: "bar-seg", style: `width:${(100 * partial / total).toFixed(1)}%;background:var(--warn)` })
+    el("div", { class: "bar-seg", style: `width:${(100 * covered / bTotal).toFixed(1)}%;background:var(--ok)` }),
+    el("div", { class: "bar-seg", style: `width:${(100 * partial / bTotal).toFixed(1)}%;background:var(--warn)` })
   );
-  document.getElementById("kpi-byox-meta").textContent = `+ bonus Control Systems (challenges/pid)`;
+  updateLocalBanner();
+}
+
+function sortInColumn(list, colId) {
+  const order = getOrder()[colId] || [];
+  const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+  return [...list].sort((a, b) => {
+    const ia = order.indexOf(a.number), ib = order.indexOf(b.number);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return (sevOrder[classifySeverity(a)] - sevOrder[classifySeverity(b)]) || (a.number - b.number);
+  });
 }
 
 function filteredIssues() {
   const q = document.getElementById("f-search").value.trim().toLowerCase();
-  const st = document.getElementById("f-state").value;
   const sev = document.getElementById("f-sev").value;
   const track = document.getElementById("f-track").value;
-  const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
   return issues
-    .filter(i => st === "all" || i.state === st)
     .filter(i => sev === "all" || classifySeverity(i) === sev)
     .filter(i => track === "all" || classifyTrack(i) === track)
-    .filter(i => !q || (`#${i.number} ${i.title} ${i.body || ""}`).toLowerCase().includes(q))
-    .sort((a, b) => (sevOrder[classifySeverity(a)] - sevOrder[classifySeverity(b)]) || (a.number - b.number));
+    .filter(i => !q || (`#${i.number} ${i.title} ${i.body || ""}`).toLowerCase().includes(q));
+}
+
+async function moveIssue(issueNumber, targetCol, insertBeforeNum = null) {
+  const issue = issues.find(i => i.number === issueNumber);
+  if (!issue) return;
+
+  // Update within-column order
+  const order = getOrder();
+  for (const col of COLUMNS) {
+    order[col.id] = (order[col.id] || []).filter(n => n !== issueNumber);
+  }
+  const destList = sortInColumn(issues.filter(i => issueColumn(i) === targetCol && i.number !== issueNumber), targetCol).map(i => i.number);
+  if (insertBeforeNum != null && destList.includes(insertBeforeNum)) {
+    destList.splice(destList.indexOf(insertBeforeNum), 0, issueNumber);
+  } else {
+    destList.unshift(issueNumber);
+  }
+  order[targetCol] = destList;
+  saveOrder(order);
+
+  const prevCol = issueColumn(issue);
+  if (prevCol === targetCol) {
+    renderIssues();
+    renderKPIs();
+    return;
+  }
+
+  const tok = getToken();
+  if (tok) {
+    // Live write to GitHub API!
+    const existingLabels = (issue.labels || []).map(l => l.name).filter(n => !LANE_LABELS.has(n));
+    const colDef = COLUMNS.find(c => c.id === targetCol);
+    if (colDef && colDef.label) existingLabels.push(colDef.label);
+    const desiredState = targetCol === "done" ? "closed" : "open";
+
+    // Optimistic local update
+    issue.state = desiredState;
+    issue.labels = existingLabels.map(name => ({ name }));
+    const ov = getOverrides();
+    delete ov[issueNumber];
+    saveOverrides(ov);
+    renderKPIs();
+    renderIssues();
+
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/issues/${issueNumber}`, {
+        method: "PATCH",
+        headers: ghHeaders(true),
+        body: JSON.stringify({ state: desiredState, labels: existingLabels })
+      });
+      if (!res.ok) throw new Error(`GitHub PATCH ${res.status}`);
+      const updated = await res.json();
+      Object.assign(issue, updated);
+      toast(`Synced #${issueNumber} → ${colDef.title} on GitHub ✓`);
+    } catch (err) {
+      toast(`GitHub sync failed (${err.message}); saved locally`);
+      const ov2 = getOverrides();
+      ov2[issueNumber] = targetCol;
+      saveOverrides(ov2);
+    }
+  } else {
+    // Local organization fallback
+    const ov = getOverrides();
+    if (targetCol === remoteColumn(issue)) delete ov[issueNumber];
+    else ov[issueNumber] = targetCol;
+    saveOverrides(ov);
+    const colDef = COLUMNS.find(c => c.id === targetCol);
+    toast(`Moved #${issueNumber} → ${colDef.title} (local)`);
+  }
+
+  renderKPIs();
+  renderIssues();
+  if (activeIssue && activeIssue.number === issueNumber && !document.getElementById("drawer-backdrop").hidden) {
+    openDrawer(issue);
+  }
+}
+
+function buildCard(issue, colId) {
+  const sev = classifySeverity(issue);
+  const track = classifyTrack(issue);
+  const pr = prByIssue.get(issue.number);
+  const dirty = isDirty(issue);
+
+  const card = el("article", {
+    class: `kcard${dirty ? " is-dirty" : ""}`,
+    draggable: "true",
+    "data-num": String(issue.number)
+  }, [
+    el("div", { class: "kcard-top" }, [
+      el("span", { class: "issue-num", text: `#${issue.number}` }),
+      el("div", { style: "display:flex;gap:4px;align-items:center" }, [
+        dirty ? el("span", { class: "badge sev-medium", text: "local" }) : null,
+        el("span", { class: `badge sev-${sev}`, text: sev })
+      ])
+    ]),
+    el("div", { class: "kcard-title", text: issue.title }),
+    el("div", { class: "kcard-tags" }, [
+      el("span", { class: "tag", text: track }),
+      pr ? el("a", {
+        class: "badge pr-pill",
+        href: pr.html_url,
+        target: "_blank",
+        rel: "noopener",
+        text: `PR #${pr.number} ↗`,
+        onclick: e => e.stopPropagation()
+      }) : null
+    ]),
+    el("div", { class: "kcard-foot" }, [
+      el("div", { class: "kcard-actions" }, [
+        colId !== "urgent" && colId !== "done"
+          ? el("button", {
+              type: "button",
+              class: "btn xs",
+              text: "🔥 Urgent",
+              title: "Move to Urgent",
+              onclick: e => { e.stopPropagation(); moveIssue(issue.number, "urgent"); }
+            })
+          : null,
+        colId !== "done"
+          ? el("button", {
+              type: "button",
+              class: "btn xs",
+              text: "📋 Prompt",
+              title: "Copy agent prompt for this task",
+              onclick: e => {
+                e.stopPropagation();
+                copyText(buildAgentPrompt(issue), e.currentTarget, "📋 Prompt");
+              }
+            })
+          : null
+      ]),
+      el("a", {
+        class: "issue-num",
+        href: issue.html_url,
+        target: "_blank",
+        rel: "noopener",
+        text: "GH ↗",
+        onclick: e => e.stopPropagation()
+      })
+    ])
+  ]);
+
+  card.addEventListener("click", () => openDrawer(issue));
+  card.addEventListener("dragstart", e => {
+    draggedNum = issue.number;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(issue.number));
+  });
+  card.addEventListener("dragend", () => {
+    draggedNum = null;
+    card.classList.remove("dragging");
+    document.querySelectorAll(".drag-over, .drop-before").forEach(n => n.classList.remove("drag-over", "drop-before"));
+  });
+  card.addEventListener("dragover", e => {
+    e.preventDefault();
+    if (draggedNum && draggedNum !== issue.number) card.classList.add("drop-before");
+  });
+  card.addEventListener("dragleave", () => card.classList.remove("drop-before"));
+  card.addEventListener("drop", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    card.classList.remove("drop-before");
+    const num = Number(e.dataTransfer.getData("text/plain") || draggedNum);
+    if (num && num !== issue.number) moveIssue(num, colId, issue.number);
+  });
+
+  return card;
 }
 
 function renderIssues() {
   const list = filteredIssues();
   const container = document.getElementById("issues-container");
-  if (!list.length) {
-    container.replaceChildren(el("div", { class: "empty", text: "No issues match the current filters." }));
-    return;
-  }
-  if (viewMode === "table") {
-    const tbody = el("tbody", {}, list.map(issue => {
-      const sev = classifySeverity(issue);
-      const track = classifyTrack(issue);
-      const labelNodes = (issue.labels || []).map(l => el("span", { class: "tag", text: l.name }));
-      return el("tr", { onclick: () => openDrawer(issue) }, [
-        el("td", { class: "issue-num", text: `#${issue.number}` }),
-        el("td", {}, [el("span", { class: `badge state-${issue.state}`, text: issue.state })]),
-        el("td", {}, [el("span", { class: `badge sev-${sev}`, text: sev })]),
-        el("td", {}, [el("span", { class: "tag", text: track })]),
-        el("td", {}, [
-          el("div", { class: "issue-title", text: issue.title }),
-          el("div", { class: "issue-tags" }, labelNodes)
-        ])
+  if (viewMode === "board") {
+    const board = el("div", { class: "kanban" }, COLUMNS.map(col => {
+      const colIssues = sortInColumn(list.filter(i => issueColumn(i) === col.id), col.id);
+      const laneList = el("div", { class: "lane-list" },
+        colIssues.length
+          ? colIssues.map(i => buildCard(i, col.id))
+          : [el("div", { class: "empty", text: "Drop cards here" })]
+      );
+      const lane = el("section", { class: "lane", "data-col": col.id, "aria-label": col.title }, [
+        el("div", { class: "lane-head" }, [
+          el("h3", { text: col.title }),
+          el("span", { class: "tag", text: String(colIssues.length) })
+        ]),
+        el("div", { class: "lane-hint", text: col.hint }),
+        laneList
       ]);
+
+      lane.addEventListener("dragover", e => {
+        e.preventDefault();
+        lane.classList.add("drag-over");
+      });
+      lane.addEventListener("dragleave", e => {
+        if (!lane.contains(e.relatedTarget)) lane.classList.remove("drag-over");
+      });
+      lane.addEventListener("drop", e => {
+        e.preventDefault();
+        lane.classList.remove("drag-over");
+        const num = Number(e.dataTransfer.getData("text/plain") || draggedNum);
+        if (num) moveIssue(num, col.id);
+      });
+      return lane;
     }));
+    container.replaceChildren(board);
+  } else {
+    const colOrder = { urgent: 0, "up-next": 1, active: 2, backlog: 3, done: 4 };
+    const sorted = [...list].sort((a, b) => (colOrder[issueColumn(a)] - colOrder[issueColumn(b)]) || (a.number - b.number));
+    if (!sorted.length) {
+      container.replaceChildren(el("div", { class: "empty", text: "No issues match the current filters." }));
+      return;
+    }
     container.replaceChildren(el("div", { class: "table-wrap" }, [
       el("table", {}, [
         el("thead", {}, [el("tr", {}, [
           el("th", { text: "#" }),
-          el("th", { text: "State" }),
+          el("th", { text: "Column" }),
           el("th", { text: "Severity" }),
           el("th", { text: "Track" }),
           el("th", { text: "Issue" })
         ])]),
-        tbody
-      ])
-    ]));
-  } else {
-    const tracks = ["Core Runner", "Reasoning & AI", "Design & Web", "Course Structure", "CI/CD & Deploy"];
-    const board = el("div", { class: "board" }, tracks.map(t => {
-      const items = list.filter(i => classifyTrack(i) === t);
-      return el("div", { class: "col" }, [
-        el("div", { class: "col-head" }, [
-          el("h3", { text: t }),
-          el("span", { class: "tag", text: String(items.length) })
-        ]),
-        ...(items.length ? items.map(issue => {
+        el("tbody", {}, sorted.map(issue => {
+          const colId = issueColumn(issue);
+          const colDef = COLUMNS.find(c => c.id === colId);
           const sev = classifySeverity(issue);
-          return el("article", { class: "card", onclick: () => openDrawer(issue) }, [
-            el("div", { class: "card-top" }, [
-              el("span", { class: "issue-num", text: `#${issue.number}` }),
-              el("span", { class: `badge sev-${sev}`, text: sev })
-            ]),
-            el("div", { class: "card-title", text: issue.title }),
-            el("div", { class: "issue-tags" }, [
-              el("span", { class: `badge state-${issue.state}`, text: issue.state }),
-              ...(issue.labels || []).map(l => el("span", { class: "tag", text: l.name }))
+          const pr = prByIssue.get(issue.number);
+          return el("tr", { onclick: () => openDrawer(issue) }, [
+            el("td", { class: "issue-num", text: `#${issue.number}` }),
+            el("td", {}, [el("span", { class: "tag", text: colDef ? colDef.title : colId })]),
+            el("td", {}, [el("span", { class: `badge sev-${sev}`, text: sev })]),
+            el("td", {}, [el("span", { class: "tag", text: classifyTrack(issue) })]),
+            el("td", {}, [
+              el("div", { style: "font-weight:600", text: issue.title }),
+              pr ? el("a", { class: "badge pr-pill", style: "margin-top:4px", href: pr.html_url, target: "_blank", rel: "noopener", text: `PR #${pr.number} ↗`, onclick: e => e.stopPropagation() }) : null
             ])
           ]);
-        }) : [el("div", { class: "empty", text: "Empty", style: "padding:14px 4px" })])
-      ]);
-    }));
-    container.replaceChildren(board);
+        }))
+      ])
+    ]));
   }
 }
 
@@ -850,9 +1274,16 @@ function renderByox() {
   grid.replaceChildren(...list.map(cat => {
     const slug = cat.course.split(" ")[0].replace("challenges/", "");
     const newCmd = `tutor new ${slug} "Build your own ${cat.name}: ${cat.desc}"`;
-    const ghNewUrl = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Course: Build your own ${cat.name}`)}&labels=enhancement&body=${encodeURIComponent(`### Build Your Own X Category\n**${cat.name}**\n\n### Target Course Path\n\`${cat.course}\`\n\n### Harness Mode Required\n\`${cat.harness}\`\n\n### Scope\n${cat.desc}\n`)}`;
     const copyBtn = el("button", { type: "button", class: "btn small", text: "Copy tutor new" });
     copyBtn.addEventListener("click", () => copyText(newCmd, copyBtn, "Copy tutor new"));
+    const queueBtn = cat.status === "planned"
+      ? el("button", {
+          type: "button",
+          class: "btn small",
+          text: "+ Queue Urgent",
+          onclick: () => openAddModal(`Course: Build your own ${cat.name}`, `### Build Your Own X Category\n**${cat.name}**\n\n### Target Course Path\n\`${cat.course}\`\n\n### Harness Mode Required\n\`${cat.harness}\`\n\n### Scope\n${cat.desc}`, "urgent", "enhancement")
+        })
+      : null;
     return el("article", { class: `byox-card is-${cat.status}` }, [
       el("div", { class: "byox-head" }, [
         el("h3", { text: cat.name }),
@@ -864,12 +1295,7 @@ function renderByox() {
       ]),
       el("p", { class: "byox-desc", text: cat.desc }),
       el("div", { class: "byox-meta" }, [el("code", { text: cat.course })]),
-      el("div", { class: "byox-actions" }, [
-        copyBtn,
-        cat.status === "planned"
-          ? el("a", { class: "btn small", href: ghNewUrl, target: "_blank", rel: "noopener", text: "+ Track Issue" })
-          : null
-      ])
+      el("div", { class: "byox-actions" }, [copyBtn, queueBtn])
     ]);
   }));
 }
@@ -879,8 +1305,8 @@ function renderRuns() {
   document.getElementById("cnt-runs").textContent = runs.length;
   if (!runs.length) {
     document.getElementById("kpi-ci-status").textContent = "Ready";
-    document.getElementById("kpi-ci-detail").textContent = "Sync with GitHub Actions to load live workflow runs.";
-    container.replaceChildren(el("div", { class: "empty", text: "No live GitHub Actions runs loaded yet. Click 'Sync GitHub' or view Actions directly." }));
+    document.getElementById("kpi-ci-detail").textContent = "Click Sync to load live workflow runs.";
+    container.replaceChildren(el("div", { class: "empty", text: "No live GitHub Actions runs loaded yet." }));
     return;
   }
   const latest = runs[0];
@@ -913,49 +1339,118 @@ function renderRuns() {
   ]));
 }
 
+function buildAgentPrompt(issue) {
+  return `Read AGENTS.md first, then solve GitHub issue #${issue.number} (${issue.html_url}): "${issue.title}".\n\n${issue.body || ""}\n\nVerify with cargo fmt --all -- --check, cargo clippy --all-targets --locked -- -D warnings, and TUTOR_LLM=off cargo test --locked.`;
+}
+
+function buildUrgentQueuePrompt() {
+  const urgent = sortInColumn(issues.filter(i => issueColumn(i) === "urgent"), "urgent");
+  const upNext = sortInColumn(issues.filter(i => issueColumn(i) === "up-next"), "up-next");
+  if (!urgent.length && !upNext.length) return "Check the Kanban board on Supragy352/tutor — no Urgent or Up Next tasks are currently queued.";
+  const lines = ["Please read AGENTS.md and tackle the highest-priority tasks from my Kanban board in order:"];
+  if (urgent.length) {
+    lines.push("\n### 🔥 Urgent (handle immediately):");
+    urgent.forEach((i, idx) => lines.push(`${idx + 1}. #${i.number} — ${i.title} (${i.html_url})`));
+  }
+  if (upNext.length) {
+    lines.push("\n### 📌 Up Next:");
+    upNext.slice(0, 5).forEach((i, idx) => lines.push(`${idx + 1}. #${i.number} — ${i.title} (${i.html_url})`));
+  }
+  return lines.join("\n");
+}
+
+function buildGhSyncScript() {
+  const dirty = issues.filter(isDirty);
+  return dirty.map(issue => {
+    const colId = issueColumn(issue);
+    const colDef = COLUMNS.find(c => c.id === colId);
+    const remove = [...LANE_LABELS].filter(l => l !== colDef.label).map(l => `--remove-label "${l}"`).join(" ");
+    if (colId === "done") return `gh issue close ${issue.number}`;
+    return `gh issue edit ${issue.number} ${remove} --add-label "${colDef.label}"`;
+  }).join("\n");
+}
+
 function openDrawer(issue) {
   activeIssue = issue;
   const sev = classifySeverity(issue);
-  const track = classifyTrack(issue);
+  const colId = issueColumn(issue);
+  const pr = prByIssue.get(issue.number);
   document.getElementById("drawer-title").textContent = `#${issue.number} · ${issue.title}`;
   document.getElementById("drawer-badges").replaceChildren(
     el("span", { class: `badge state-${issue.state}`, text: issue.state }),
     el("span", { class: `badge sev-${sev}`, text: sev }),
-    el("span", { class: "tag", text: track }),
-    ...(issue.labels || []).map(l => el("span", { class: "tag", text: l.name }))
+    el("span", { class: "tag", text: classifyTrack(issue) }),
+    pr ? el("a", { class: "badge pr-pill", href: pr.html_url, target: "_blank", rel: "noopener", text: `PR #${pr.number} ↗` }) : null
+  );
+  const moveBar = document.getElementById("drawer-move-bar");
+  moveBar.replaceChildren(
+    el("span", { class: "label", style: "margin-right:4px", text: "Column:" }),
+    ...COLUMNS.map(col => el("button", {
+      type: "button",
+      class: "btn xs",
+      "aria-pressed": String(col.id === colId),
+      text: col.title,
+      onclick: () => moveIssue(issue.number, col.id)
+    }))
   );
   document.getElementById("drawer-gh").href = issue.html_url;
   document.getElementById("drawer-body").textContent = issue.body || "(No description)";
   document.getElementById("drawer-backdrop").hidden = false;
 }
 
-function closeDrawer() {
-  document.getElementById("drawer-backdrop").hidden = true;
+function openAddModal(title = "", body = "", col = "urgent", label = "enhancement") {
+  document.getElementById("add-task-title").value = title;
+  document.getElementById("add-task-body").value = body;
+  document.getElementById("add-task-col").value = col;
+  document.getElementById("add-task-label").value = label;
+  document.getElementById("add-submit").textContent = getToken() ? "Create Live GitHub Issue" : "Open Prefilled on GitHub ↗";
+  document.getElementById("add-backdrop").hidden = false;
+  document.getElementById("add-task-title").focus();
 }
 
 async function copyText(text, btn, original) {
   try {
     await navigator.clipboard.writeText(text);
-    btn.textContent = "Copied ✓";
+    if (btn) btn.textContent = "Copied ✓";
+    toast("Copied to clipboard");
   } catch {
-    btn.textContent = "Copy failed";
+    if (btn) btn.textContent = "Copy failed";
   }
-  clearTimeout(btn._t);
-  btn._t = setTimeout(() => { btn.textContent = original; }, 1600);
+  if (btn && original) {
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.textContent = original; }, 1600);
+  }
+}
+
+function linkPRsToIssues() {
+  prByIssue = new Map();
+  const re = /(?:closes|fixes|resolves)\s+#(\d+)/gi;
+  for (const pr of openPRs) {
+    const text = `${pr.title || ""}\n${pr.body || ""}`;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      prByIssue.set(Number(m[1]), pr);
+    }
+  }
 }
 
 async function syncGitHub() {
   const pill = document.getElementById("sync-status");
-  pill.textContent = "Syncing GitHub…";
+  pill.textContent = "Syncing…";
   pill.classList.remove("live");
   try {
-    const [issRes, runRes] = await Promise.all([
-      fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, { headers: { Accept: "application/vnd.github+json" } }),
-      fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=12`, { headers: { Accept: "application/vnd.github+json" } })
+    const [issRes, prRes, runRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, { headers: ghHeaders() }),
+      fetch(`https://api.github.com/repos/${REPO}/pulls?state=open&per_page=50`, { headers: ghHeaders() }),
+      fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=12`, { headers: ghHeaders() })
     ]);
-    if (!issRes.ok) throw new Error(`Issues API ${issRes.status}`);
+    if (!issRes.ok) throw new Error(`API ${issRes.status}`);
     const rawIssues = await issRes.json();
     issues = rawIssues.filter(i => !i.pull_request);
+    if (prRes.ok) {
+      openPRs = await prRes.json();
+      linkPRsToIssues();
+    }
     if (runRes.ok) {
       const runData = await runRes.json();
       runs = runData.workflow_runs || [];
@@ -963,8 +1458,9 @@ async function syncGitHub() {
     pill.textContent = `Live · ${new Date().toLocaleTimeString()}`;
     pill.classList.add("live");
   } catch (err) {
-    pill.textContent = `Offline snapshot (${err.message})`;
+    pill.textContent = `Snapshot (${err.message})`;
   }
+  updateAuthBadge();
   renderKPIs();
   renderIssues();
   renderByox();
@@ -982,8 +1478,8 @@ for (const tab of document.querySelectorAll(".tab")) {
   });
 }
 
-// Issue filters
-for (const id of ["f-search", "f-state", "f-sev", "f-track"]) {
+// Filters
+for (const id of ["f-search", "f-sev", "f-track"]) {
   document.getElementById(id).addEventListener("input", renderIssues);
   document.getElementById(id).addEventListener("change", renderIssues);
 }
@@ -992,45 +1488,147 @@ for (const id of ["byox-search", "byox-status", "byox-harness"]) {
   document.getElementById(id).addEventListener("change", renderByox);
 }
 
+document.getElementById("view-board").addEventListener("click", () => {
+  viewMode = "board";
+  document.getElementById("view-board").setAttribute("aria-pressed", "true");
+  document.getElementById("view-table").setAttribute("aria-pressed", "false");
+  renderIssues();
+});
 document.getElementById("view-table").addEventListener("click", () => {
   viewMode = "table";
   document.getElementById("view-table").setAttribute("aria-pressed", "true");
   document.getElementById("view-board").setAttribute("aria-pressed", "false");
   renderIssues();
 });
-document.getElementById("view-board").addEventListener("click", () => {
-  viewMode = "board";
-  document.getElementById("view-table").setAttribute("aria-pressed", "false");
-  document.getElementById("view-board").setAttribute("aria-pressed", "true");
-  renderIssues();
-});
 
-document.getElementById("drawer-close").addEventListener("click", closeDrawer);
-document.getElementById("drawer-backdrop").addEventListener("click", e => {
-  if (e.target.id === "drawer-backdrop") closeDrawer();
-});
-document.addEventListener("keydown", e => {
-  if (e.key === "Escape") closeDrawer();
-});
-
+// Drawer & Modals
+document.getElementById("drawer-close").addEventListener("click", () => { document.getElementById("drawer-backdrop").hidden = true; });
+document.getElementById("drawer-backdrop").addEventListener("click", e => { if (e.target.id === "drawer-backdrop") e.currentTarget.hidden = true; });
 document.getElementById("drawer-copy-prompt").addEventListener("click", e => {
-  if (!activeIssue) return;
-  const prompt = `Read AGENTS.md first, then solve GitHub issue #${activeIssue.number} (${activeIssue.html_url}): "${activeIssue.title}".\n\n${activeIssue.body}\n\nVerify with cargo fmt --check, cargo clippy --all-targets --locked -- -D warnings, and TUTOR_LLM=off cargo test --locked.`;
-  copyText(prompt, e.currentTarget, "Copy Agent Prompt");
+  if (activeIssue) copyText(buildAgentPrompt(activeIssue), e.currentTarget, "📋 Copy Agent Prompt");
 });
 
+const openAuth = () => {
+  document.getElementById("auth-token-input").value = getToken();
+  document.getElementById("auth-backdrop").hidden = false;
+  document.getElementById("auth-token-input").focus();
+};
+document.getElementById("btn-auth").addEventListener("click", openAuth);
+document.getElementById("btn-connect-from-banner").addEventListener("click", openAuth);
+document.getElementById("auth-close").addEventListener("click", () => { document.getElementById("auth-backdrop").hidden = true; });
+document.getElementById("auth-backdrop").addEventListener("click", e => { if (e.target.id === "auth-backdrop") e.currentTarget.hidden = true; });
+document.getElementById("auth-clear").addEventListener("click", () => {
+  localStorage.removeItem(LS_TOKEN);
+  document.getElementById("auth-backdrop").hidden = true;
+  updateAuthBadge();
+  toast("Disconnected GitHub token (read-only mode)");
+});
+document.getElementById("auth-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const tok = document.getElementById("auth-token-input").value.trim();
+  if (tok) localStorage.setItem(LS_TOKEN, tok);
+  else localStorage.removeItem(LS_TOKEN);
+  document.getElementById("auth-backdrop").hidden = true;
+  updateAuthBadge();
+  // Push any pending local moves if token was just connected
+  const dirty = issues.filter(isDirty);
+  if (tok && dirty.length) {
+    toast(`Syncing ${dirty.length} local move(s) to GitHub…`);
+    const ov = getOverrides();
+    for (const issue of dirty) {
+      await moveIssue(issue.number, ov[issue.number]);
+    }
+  }
+  await syncGitHub();
+});
+
+// Add Task Modal
+document.getElementById("btn-add-task").addEventListener("click", () => openAddModal());
+document.getElementById("add-close").addEventListener("click", () => { document.getElementById("add-backdrop").hidden = true; });
+document.getElementById("add-cancel").addEventListener("click", () => { document.getElementById("add-backdrop").hidden = true; });
+document.getElementById("add-backdrop").addEventListener("click", e => { if (e.target.id === "add-backdrop") e.currentTarget.hidden = true; });
+document.getElementById("add-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const title = document.getElementById("add-task-title").value.trim();
+  const body = document.getElementById("add-task-body").value.trim();
+  const col = document.getElementById("add-task-col").value;
+  const label = document.getElementById("add-task-label").value;
+  const colLabel = (COLUMNS.find(c => c.id === col) || {}).label;
+  const labels = [label, colLabel].filter(Boolean);
+  const tok = getToken();
+  document.getElementById("add-backdrop").hidden = true;
+
+  if (tok) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/issues`, {
+        method: "POST",
+        headers: ghHeaders(true),
+        body: JSON.stringify({ title, body, labels })
+      });
+      if (!res.ok) throw new Error(`GitHub POST ${res.status}`);
+      const created = await res.json();
+      issues.unshift(created);
+      renderKPIs();
+      renderIssues();
+      toast(`Created #${created.number} in ${col} ✓`);
+    } catch (err) {
+      toast(`Could not create issue: ${err.message}`);
+    }
+  } else {
+    const url = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(title)}&labels=${encodeURIComponent(labels.join(","))}&body=${encodeURIComponent(body)}`;
+    window.open(url, "_blank", "noopener");
+  }
+});
+
+// Banner & Toolbar actions
+document.getElementById("btn-copy-urgent").addEventListener("click", e => {
+  copyText(buildUrgentQueuePrompt(), e.currentTarget, "🚀 Copy Urgent Queue for Agent");
+});
+document.getElementById("btn-copy-gh").addEventListener("click", e => {
+  copyText(buildGhSyncScript(), e.currentTarget, "⌨ Copy gh Sync Commands");
+});
+document.getElementById("btn-reset-local").addEventListener("click", () => {
+  localStorage.removeItem(LS_OVERRIDES);
+  localStorage.removeItem(LS_ORDER);
+  renderKPIs();
+  renderIssues();
+  toast("Reset local moves to match GitHub");
+});
 document.getElementById("btn-sync").addEventListener("click", syncGitHub);
+document.getElementById("btn-auto").addEventListener("click", e => {
+  autoPoll = !autoPoll;
+  e.currentTarget.setAttribute("aria-pressed", String(autoPoll));
+  e.currentTarget.textContent = autoPoll ? "● Auto 30s" : "○ Auto off";
+  clearInterval(pollTimer);
+  if (autoPoll) pollTimer = setInterval(syncGitHub, 30000);
+});
+
+// Theme persistence
+const savedTheme = localStorage.getItem(LS_THEME);
+if (savedTheme) document.documentElement.setAttribute("data-theme", savedTheme);
 document.getElementById("btn-theme").addEventListener("click", () => {
   const root = document.documentElement;
   const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
-  root.setAttribute("data-theme", dark ? "light" : "dark");
+  const next = dark ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  localStorage.setItem(LS_THEME, next);
 });
 
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    document.getElementById("drawer-backdrop").hidden = true;
+    document.getElementById("auth-backdrop").hidden = true;
+    document.getElementById("add-backdrop").hidden = true;
+  }
+});
+
+updateAuthBadge();
 renderKPIs();
 renderIssues();
 renderByox();
 renderRuns();
 syncGitHub();
+pollTimer = setInterval(syncGitHub, 30000);
 </script>
 </body>
 </html>
