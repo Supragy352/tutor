@@ -75,7 +75,8 @@ body {
 .topbar-links {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
+  flex-wrap: wrap;
   font-family: var(--mono);
   font-size: 13px;
 }
@@ -86,14 +87,17 @@ body {
 .topbar-links a:hover, .topbar-links a[aria-current="page"] {
   color: var(--signal);
 }
-.topbar-links .pill {
+.topbar-links .pill, .topbar-links .theme-btn {
   padding: 4px 10px;
   border: 1px solid var(--rule);
   border-radius: 4px;
   background: var(--paper);
   color: var(--ink);
+  font: inherit;
+  line-height: 1.4;
+  cursor: pointer;
 }
-.topbar-links .pill:hover {
+.topbar-links .pill:hover, .topbar-links .theme-btn:hover {
   border-color: var(--signal);
   color: var(--signal);
 }
@@ -130,6 +134,24 @@ section { display: grid; gap: 24px; }
 .iae strong { color: var(--signal); }
 .scope svg { width: 100%; height: auto; display: block; }
 .scope svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.presets { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.presets .label { margin-right: 4px; }
+.preset {
+  padding: 3px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.preset:hover { border-color: var(--signal); color: var(--signal); }
+.preset[aria-pressed="true"] {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--panel);
+}
 .knobs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .knob { display: grid; gap: 2px; }
 .knob label { font-family: var(--mono); font-size: 13px; display: flex; justify-content: space-between; font-variant-numeric: tabular-nums; }
@@ -196,6 +218,7 @@ footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule)
       <a href="./index.html" aria-current="page">Overview</a>
       <a class="pill" href="./dashboard.html">Mission Control &amp; Issues →</a>
       <a href="https://github.com/Supragy352/tutor" target="_blank" rel="noopener">GitHub</a>
+      <button type="button" class="theme-btn" id="btn-theme" title="Toggle light/dark theme">◐ Theme</button>
     </div>
   </div>
 </nav>
@@ -215,6 +238,13 @@ footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule)
         <span class="iae">IAE <strong id="iae">0.000</strong></span>
       </div>
       <svg id="plot" viewBox="0 0 600 260" role="img" aria-label="Plant output following a setpoint step under PID control"></svg>
+      <div class="presets" role="group" aria-label="PID gain presets">
+        <span class="label">Presets</span>
+        <button type="button" class="preset" data-kp="2.0" data-ki="0" data-kd="0" aria-pressed="false">P-only</button>
+        <button type="button" class="preset" data-kp="1.2" data-ki="6" data-kd="0" aria-pressed="false">PI</button>
+        <button type="button" class="preset" data-kp="2.4" data-ki="4" data-kd="0.05" aria-pressed="true">Balanced</button>
+        <button type="button" class="preset" data-kp="0.4" data-ki="10" data-kd="0" aria-pressed="false">Underdamped</button>
+      </div>
       <div class="knobs">
         <div class="knob"><label for="kp">kp <output id="kp-v"></output></label><input id="kp" type="range" min="0" max="8" step="0.1" value="2.4"></div>
         <div class="knob"><label for="ki">ki <output id="ki-v"></output></label><input id="ki" type="range" min="0" max="12" step="0.1" value="4"></div>
@@ -322,7 +352,7 @@ tutor init ../tutor/challenges/pid --build "gcc -O2 -Wall -o pid main.c -lm" ./p
 </div>
 
 <script>
-// Same discrete PID as the course: integral += e*dt, derivative on measurement, clamped output with anti-windup.
+// Same discrete PID as the course: integral += e*dt, derivative on measurement, clamped output with Stage 5 conditional anti-windup.
 function simulate(kp, ki, kd) {
   const dt = 0.02, steps = 250, tau = 0.5, gain = 1, sp = 1, lo = 0, hi = 3;
   let y = 0, integral = 0, prev = 0, iae = 0;
@@ -332,9 +362,10 @@ function simulate(kp, ki, kd) {
     iae += Math.abs(e) * dt;
     const next = integral + e * dt;
     const d = i === 0 ? 0 : -(y - prev) / dt;
-    let u = kp * e + ki * next + kd * d;
-    if (u > hi || u < lo) u = Math.min(hi, Math.max(lo, u)); // saturated: keep the old integral
-    else integral = next;
+    const pd = kp * e + kd * d;
+    const u_tent = pd + ki * next;
+    if (!((u_tent > hi && e > 0) || (u_tent < lo && e < 0))) integral = next;
+    const u = Math.min(hi, Math.max(lo, pd + ki * integral));
     prev = y;
     y += dt * (gain * u - y) / tau;
     ys.push(y);
@@ -343,9 +374,8 @@ function simulate(kp, ki, kd) {
 }
 
 const svg = document.getElementById("plot"), NS = "http://www.w3.org/2000/svg";
-const W = 600, H = 260, L = 34, R = 10, T = 12, B = 26, YMAX = 1.6;
+const W = 600, H = 260, L = 34, R = 10, T = 12, B = 26;
 const sx = (i, n) => L + (i / n) * (W - L - R);
-const sy = v => T + (1 - Math.min(Math.max(v, 0), YMAX) / YMAX) * (H - T - B);
 
 function el(name, attrs, text) {
   const n = document.createElementNS(NS, name);
@@ -362,10 +392,19 @@ function draw() {
   const { ys, iae, t } = simulate(kp, ki, kd);
   document.getElementById("iae").textContent = iae.toFixed(3);
 
+  const ymax = Math.max(1.6, Math.ceil(Math.max(...ys) * 2) / 2);
+  const sy = v => T + (1 - v / ymax) * (H - T - B);
+
   const css = getComputedStyle(document.documentElement);
-  const grid = css.getPropertyValue("--rule"), signal = css.getPropertyValue("--signal"), sp = css.getPropertyValue("--setpoint");
+  const grid = css.getPropertyValue("--rule").trim(), signal = css.getPropertyValue("--signal").trim(), sp = css.getPropertyValue("--setpoint").trim();
   svg.replaceChildren();
-  for (const v of [0, 0.5, 1, 1.5]) {
+  const defs = el("defs", {});
+  const clip = el("clipPath", { id: "plot-clip" });
+  clip.append(el("rect", { x: L, y: T - 2, width: W - L - R, height: H - T - B + 4 }));
+  defs.append(clip);
+  svg.append(defs);
+
+  for (let v = 0; v <= ymax + 1e-9; v += 0.5) {
     svg.append(el("line", { x1: L, x2: W - R, y1: sy(v), y2: sy(v), stroke: grid, "stroke-width": 1 }));
     svg.append(el("text", { x: L - 6, y: sy(v) + 4, "text-anchor": "end" }, v.toFixed(1)));
   }
@@ -376,10 +415,28 @@ function draw() {
   svg.append(el("line", { x1: L, x2: W - R, y1: sy(1), y2: sy(1), stroke: sp, "stroke-width": 1.5, "stroke-dasharray": "6 5" }));
   svg.append(el("text", { x: W - R, y: sy(1) - 6, "text-anchor": "end", fill: sp }, "setpoint"));
   const d = ys.map((v, i) => (i ? "L" : "M") + sx(i, ys.length - 1).toFixed(1) + " " + sy(v).toFixed(1)).join("");
-  svg.append(el("path", { d, fill: "none", stroke: signal, "stroke-width": 2.5, "stroke-linejoin": "round" }));
+  svg.append(el("path", { d, fill: "none", stroke: signal, "stroke-width": 2.5, "stroke-linejoin": "round", "clip-path": "url(#plot-clip)" }));
+
+  for (const btn of document.querySelectorAll(".preset")) {
+    const match = Math.abs(+btn.dataset.kp - kp) < 1e-6 && Math.abs(+btn.dataset.ki - ki) < 1e-6 && Math.abs(+btn.dataset.kd - kd) < 1e-6;
+    btn.setAttribute("aria-pressed", String(match));
+  }
 }
 
 for (const id of ["kp", "ki", "kd"]) document.getElementById(id).addEventListener("input", draw);
+for (const btn of document.querySelectorAll(".preset")) {
+  btn.addEventListener("click", () => {
+    document.getElementById("kp").value = btn.dataset.kp;
+    document.getElementById("ki").value = btn.dataset.ki;
+    document.getElementById("kd").value = btn.dataset.kd;
+    draw();
+  });
+}
+document.getElementById("btn-theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.setAttribute("data-theme", dark ? "light" : "dark");
+});
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 draw();
@@ -397,7 +454,8 @@ for (const b of document.querySelectorAll(".cmd button")) {
       getSelection().addRange(range);
       b.textContent = "Selected";
     }
-    setTimeout(() => (b.textContent = "Copy"), 1500);
+    clearTimeout(b._t);
+    b._t = setTimeout(() => (b.textContent = "Copy"), 1500);
   });
 }
 </script>
