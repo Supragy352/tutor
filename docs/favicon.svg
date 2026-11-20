@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="pad-bg" x1="4" y1="2" x2="60" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22332a"/>
+      <stop offset="100%" stop-color="#121b16"/>
+    </linearGradient>
+    <linearGradient id="curve-stroke" x1="10" y1="48" x2="52" y2="20" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#487bff"/>
+      <stop offset="55%" stop-color="#709cff"/>
+      <stop offset="100%" stop-color="#a2c0ff"/>
+    </linearGradient>
+    <linearGradient id="curve-fill" x1="28" y1="15" x2="36" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#5a8bff" stop-opacity="0.22"/>
+      <stop offset="85%" stop-color="#5a8bff" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#5a8bff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="fill-fade" x1="10" y1="0" x2="54" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="72%" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="area-mask">
+      <rect x="0" y="0" width="64" height="64" fill="url(#fill-fade)"/>
+    </mask>
+    <clipPath id="tile-clip">
+      <rect x="1" y="1" width="62" height="62" rx="15"/>
+    </clipPath>
+  </defs>
+
+  <!-- Engineering computation pad tile -->
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="url(#pad-bg)"/>
+
+  <!-- Subtle blueprint graph grid -->
+  <g clip-path="url(#tile-clip)" stroke="#2b3f34" stroke-width="1">
+    <line x1="16" y1="1" x2="16" y2="63"/>
+    <line x1="32" y1="1" x2="32" y2="63"/>
+    <line x1="48" y1="1" x2="48" y2="63"/>
+    <line x1="1" y1="16" x2="63" y2="16"/>
+    <line x1="1" y1="32" x2="63" y2="32"/>
+    <line x1="1" y1="48" x2="63" y2="48"/>
+  </g>
+
+  <!-- Baseline axis -->
+  <line x1="9" y1="48" x2="55" y2="48" stroke="#3c5447" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Terracotta setpoint reference line -->
+  <line x1="9" y1="24" x2="55" y2="24" stroke="#f49474" stroke-width="2.4" stroke-dasharray="4.2 3.5" stroke-linecap="round" opacity="0.95"/>
+
+  <!-- Soft under-curve oscilloscope glow (feathered horizontally to avoid hard edge) -->
+  <path d="M 10.5 48 C 16.5 48, 20 14, 28.5 14 C 35 14, 35 27.5, 41.5 26.8 C 45.5 26.3, 47.5 24, 52 24 L 52 48 Z" fill="url(#curve-fill)" mask="url(#area-mask)"/>
+
+  <!-- Cobalt step-response convergence curve -->
+  <path d="M 10.5 48 C 16.5 48, 20 14, 28.5 14 C 35 14, 35 27.5, 41.5 26.8 C 45.5 26.3, 47.5 24, 52 24" stroke="url(#curve-stroke)" stroke-width="5.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Target lock-on node -->
+  <circle cx="52" cy="24" r="7" fill="#84a6ff" opacity="0.28"/>
+  <circle cx="52" cy="24" r="3.9" fill="#f8faf4" stroke="#487bff" stroke-width="2"/>
+
+  <!-- Outer hairline bevel -->
+  <rect x="1.75" y="1.75" width="60.5" height="60.5" rx="14.25" stroke="#3e5649" stroke-width="1.5"/>
+</svg>

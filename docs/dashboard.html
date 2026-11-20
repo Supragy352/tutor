@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mission Control · tutor</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<meta name="theme-color" content="#1b2822">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -83,7 +87,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-wrap: wrap;
 }
 .brand-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.topbar-brand { font-family: var(--display); font-weight: 700; font-size: 24px; text-decoration: none; color: var(--ink); }
+.topbar-brand { display: inline-flex; align-items: center; gap: 9px; font-family: var(--display); font-weight: 700; font-size: 24px; text-decoration: none; color: var(--ink); }
+.brand-icon { display: block; width: 26px; height: 26px; flex-shrink: 0; }
 .sync-pill {
   font-family: var(--mono);
   font-size: 11px;
@@ -489,7 +494,7 @@ footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-
 <nav class="topbar" aria-label="Site navigation">
   <div class="topbar-inner">
     <div class="brand-group">
-      <a class="topbar-brand" href="./index.html">tutor</a>
+      <a class="topbar-brand" href="./index.html"><img class="brand-icon" src="./favicon.svg" alt="" width="26" height="26"><span>tutor</span></a>
       <span class="sync-pill" id="sync-status">Connecting…</span>
       <span class="sync-pill" id="auth-status">Read-only</span>
     </div>

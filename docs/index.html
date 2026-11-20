@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tutor</title>
+<link rel="icon" type="image/svg+xml" href="./favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+<meta name="theme-color" content="#1b2822">
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -65,12 +69,21 @@ body {
   flex-wrap: wrap;
 }
 .topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-family: var(--display);
   font-weight: 700;
   font-size: 22px;
   text-decoration: none;
   color: var(--ink);
   letter-spacing: -.01em;
+}
+.brand-icon {
+  display: block;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
 }
 .topbar-links {
   display: flex;
@@ -191,7 +204,7 @@ footer { font-size: 14px; color: var(--muted); border-top: 1px solid var(--rule)
 <body>
 <nav class="topbar" aria-label="Site navigation">
   <div class="topbar-inner">
-    <a class="topbar-brand" href="./index.html">tutor</a>
+    <a class="topbar-brand" href="./index.html"><img class="brand-icon" src="./favicon.svg" alt="" width="26" height="26"><span>tutor</span></a>
     <div class="topbar-links">
       <a href="./index.html" aria-current="page">Overview</a>
       <a class="pill" href="./dashboard.html">Mission Control &amp; Issues →</a>
