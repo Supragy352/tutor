@@ -1,12 +1,14 @@
 mod cli;
+mod process;
 
 use cli::{Action, USAGE};
+use process::ExecError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use std::{env, fs};
@@ -125,10 +127,14 @@ fn load_progress_from(path: &Path) -> Result<Progress, String> {
     toml::from_str(&text).map_err(|e| e.to_string())
 }
 
-fn load() -> Result<(Progress, Challenge), String> {
-    let p = load_progress_from(Path::new(PROGRESS))?;
+fn load_from(path: &Path) -> Result<(Progress, Challenge), String> {
+    let p = load_progress_from(path)?;
     let c = read_challenge(&p.challenge)?;
     Ok((p, c))
+}
+
+fn load() -> Result<(Progress, Challenge), String> {
+    load_from(Path::new(PROGRESS))
 }
 
 fn save_to(path: &Path, p: &Progress) -> Result<(), String> {
@@ -318,6 +324,22 @@ fn test() -> Result<(), String> {
 
 /// One full check of the current stage: build, tests, local review, escalation. Shared by the CLI, the hook and the web page.
 fn check(p: &mut Progress, c: &Challenge) -> Result<LastRun, String> {
+    check_with(Path::new(PROGRESS), p, c, build_and_run, review, escalate)
+}
+
+fn check_with<R, V, E>(
+    progress_path: &Path,
+    p: &mut Progress,
+    c: &Challenge,
+    run_fn: R,
+    review_fn: V,
+    escalate_fn: E,
+) -> Result<LastRun, String>
+where
+    R: FnOnce(&Progress, &Challenge) -> (String, bool),
+    V: FnOnce(&Stage, &str) -> Option<String>,
+    E: FnOnce(&Stage, &str, Option<&str>) -> Result<String, String>,
+{
     let stage = c.stages.get(p.stage).ok_or("course already finished")?;
     verbose!(
         "checking stage {}/{}: {} (failed runs so far: {})",
@@ -326,8 +348,8 @@ fn check(p: &mut Progress, c: &Challenge) -> Result<LastRun, String> {
         stage.name,
         p.fails
     );
-    let (report, ok) = build_and_run(p, c);
-    let review = review(stage, &report);
+    let (report, ok) = run_fn(p, c);
+    let review = review_fn(stage, &report);
     let mut hint = None;
     let at = p.stage;
     if ok {
@@ -336,11 +358,16 @@ fn check(p: &mut Progress, c: &Challenge) -> Result<LastRun, String> {
     } else {
         p.fails += 1;
         if p.fails >= ESCALATE_AFTER {
-            p.fails = 0; // ask Claude again only after another run of failures
             println!("Stuck for {ESCALATE_AFTER} attempts; asking Claude Code...\n");
-            let h = escalate(stage, &report, review.as_deref())
-                .unwrap_or_else(|e| format!("(Claude Code failed: {e})"));
-            hint = Some(h);
+            match escalate_fn(stage, &report, review.as_deref()) {
+                Ok(h) => {
+                    p.fails = 0; // ask Claude again only after another run of failures
+                    hint = Some(h);
+                }
+                Err(e) => {
+                    println!("(Claude Code skipped: {e})\n");
+                }
+            }
         }
     }
     let last = LastRun {
@@ -351,20 +378,50 @@ fn check(p: &mut Progress, c: &Challenge) -> Result<LastRun, String> {
         hint,
     };
     p.last = Some(last.clone());
-    save(p)?;
+    save_to(progress_path, p)?;
     Ok(last)
 }
 
 fn current_hint() -> Result<String, String> {
-    let (p, c) = load()?;
+    current_hint_with(Path::new(PROGRESS), build_and_run, escalate)
+}
+
+fn current_hint_with<R, E>(
+    progress_path: &Path,
+    run_fn: R,
+    escalate_fn: E,
+) -> Result<String, String>
+where
+    R: FnOnce(&Progress, &Challenge) -> (String, bool),
+    E: FnOnce(&Stage, &str, Option<&str>) -> Result<String, String>,
+{
+    let (mut p, c) = load_from(progress_path)?;
     let stage = c.stages.get(p.stage).ok_or("course already finished")?;
-    let (report, _) = build_and_run(&p, &c);
+    let (report, ok) = run_fn(&p, &c);
     let review = p
         .last
         .as_ref()
         .filter(|l| l.stage == p.stage)
         .and_then(|l| l.review.as_deref());
-    escalate(stage, &report, review)
+    let h = escalate_fn(stage, &report, review)?;
+    match p.last.as_mut().filter(|l| l.stage == p.stage) {
+        Some(last) => {
+            last.ok = ok;
+            last.report = report;
+            last.hint = Some(h.clone());
+        }
+        None => {
+            p.last = Some(LastRun {
+                stage: p.stage,
+                ok,
+                report,
+                review: None,
+                hint: Some(h.clone()),
+            });
+        }
+    }
+    save_to(progress_path, &p)?;
+    Ok(h)
 }
 
 fn build_and_run(p: &Progress, c: &Challenge) -> (String, bool) {
@@ -375,12 +432,35 @@ fn build_and_run(p: &Progress, c: &Challenge) -> (String, bool) {
             Ok(parts) => parts,
             Err(e) => return (format!("  BUILD invalid command `{cmd}`: {e}"), false),
         };
-        let out = match parts.split_first() {
-            Some((prog, args)) => Command::new(prog).args(args).output(),
+        let (prog, rest) = match parts.split_first() {
+            Some(pair) => pair,
             None => return ("  BUILD: empty build command".into(), false),
         };
+        let args: Vec<&str> = rest.iter().map(String::as_str).collect();
+        let out = process::run_command(
+            prog,
+            &args,
+            Path::new("."),
+            None,
+            true,
+            Some(process::build_timeout()),
+        );
         match out {
-            Err(e) => return (format!("  BUILD could not start `{cmd}`: {e}"), false),
+            Err(ExecError::Spawn(e)) => {
+                return (format!("  BUILD could not start `{cmd}`: {e}"), false);
+            }
+            Err(ExecError::TimedOut(d)) => {
+                return (
+                    format!(
+                        "  BUILD timed out after {} `{cmd}`",
+                        process::format_timeout(d)
+                    ),
+                    false,
+                );
+            }
+            Err(ExecError::Io(e)) => {
+                return (format!("  BUILD failed `{cmd}`: {e}"), false);
+            }
             Ok(o) => {
                 let log = format!(
                     "{}{}",
@@ -425,24 +505,31 @@ fn run_stages(run: &str, cwd: &Path, stages: &[Stage]) -> (String, bool) {
 }
 
 fn run_test(run: &str, cwd: &Path, t: &Test) -> Result<(), String> {
+    run_test_with_timeout(run, cwd, t, process::test_timeout())
+}
+
+fn run_test_with_timeout(run: &str, cwd: &Path, t: &Test, timeout: Duration) -> Result<(), String> {
     let parts = cli::split_command(run).map_err(|e| format!("    invalid run command: {e}"))?;
     let (prog, base_args) = parts
         .split_first()
         .ok_or_else(|| "empty run command".to_string())?;
+    let mut args: Vec<&str> = base_args.iter().map(String::as_str).collect();
+    args.extend(t.args.iter().map(String::as_str));
     verbose!("test: $ {run} {}  stdin={:?}", t.args.join(" "), t.stdin);
     let started = Instant::now();
-    let mut child = Command::new(prog)
-        .args(base_args)
-        .args(&t.args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("    could not start `{run}`: {e}"))?;
-    // Ignore write errors: a program that never reads stdin closes the pipe early.
-    let _ = child.stdin.take().unwrap().write_all(t.stdin.as_bytes());
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let out = process::run_command(
+        prog,
+        &args,
+        cwd,
+        Some(t.stdin.as_bytes()),
+        true,
+        Some(timeout),
+    )
+    .map_err(|e| match e {
+        ExecError::Spawn(err) => format!("    could not start `{run}`: {err}"),
+        ExecError::TimedOut(d) => format!("    timed out after {}", process::format_timeout(d)),
+        ExecError::Io(err) => err.to_string(),
+    })?;
     let got = String::from_utf8_lossy(&out.stdout);
     verbose!(
         "      {} in {:.1?}  stdout={:?}  expected={:?}  stderr={:?}",
@@ -556,21 +643,24 @@ fn claude(prompt: &str, cwd: &Path, args: &[&str]) -> Result<String, String> {
         prompt.len()
     );
     let started = Instant::now();
-    let mut child = Command::new("claude")
-        .arg("-p")
-        .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("could not start Claude Code (`claude`): {e}"))?;
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(prompt.as_bytes())
-        .map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let mut full_args = Vec::with_capacity(args.len() + 1);
+    full_args.push("-p");
+    full_args.extend_from_slice(args);
+    let out = process::run_command(
+        "claude",
+        &full_args,
+        cwd,
+        Some(prompt.as_bytes()),
+        false,
+        None,
+    )
+    .map_err(|e| match e {
+        ExecError::Spawn(err) => format!("could not start Claude Code (`claude`): {err}"),
+        ExecError::TimedOut(d) => {
+            format!("Claude Code timed out after {}", process::format_timeout(d))
+        }
+        ExecError::Io(err) => err.to_string(),
+    })?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     verbose!("claude: {} after {:.1?}", out.status, started.elapsed());
     if !out.status.success() {
@@ -592,10 +682,40 @@ fn serve(port: u16) -> Result<(), String> {
     Ok(())
 }
 
-fn handle(mut s: TcpStream) -> std::io::Result<()> {
-    let mut buf = vec![0; 8192];
-    let n = s.read(&mut buf)?;
-    let req = String::from_utf8_lossy(&buf[..n]);
+#[derive(Debug, PartialEq, Eq)]
+enum Route {
+    Forbidden,
+    Index,
+    ApiState,
+    ApiTest,
+    ApiHint,
+    NotFound,
+}
+
+fn has_header_end(buf: &[u8]) -> bool {
+    buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.windows(2).any(|w| w == b"\n\n")
+}
+
+fn read_http_head(r: &mut impl Read) -> std::io::Result<Vec<u8>> {
+    let mut buf = [0u8; 8192];
+    let mut len = 0;
+    while len < buf.len() {
+        match r.read(&mut buf[len..]) {
+            Ok(0) => break,
+            Ok(n) => {
+                len += n;
+                if has_header_end(&buf[..len]) {
+                    break;
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(buf[..len].to_vec())
+}
+
+fn parse_route(req: &str) -> Route {
     let mut lines = req.lines();
     let mut start = lines.next().unwrap_or("").split_whitespace();
     let (method, path) = (start.next().unwrap_or(""), start.next().unwrap_or(""));
@@ -609,23 +729,58 @@ fn handle(mut s: TcpStream) -> std::io::Result<()> {
             .find_map(|l| l.strip_prefix(name))
             .map(str::trim)
     };
-    // A localhost Host header blocks DNS rebinding; the custom header on POSTs forces a CORS preflight other sites can't pass.
+    // A localhost Host header blocks DNS rebinding; the custom header on API routes forces a CORS preflight other sites can't pass.
     let host = header("host:").map(|h| h.rsplit_once(':').map_or(h, |(name, _)| name));
     let local = matches!(host, Some("localhost" | "127.0.0.1"));
     let from_page = header("x-tutor:").is_some();
-    let (status, ctype, body): (&str, &str, String) = match (local, method, path) {
-        (false, ..) => ("403 Forbidden", "text/plain", "forbidden".into()),
-        (_, "GET", "/") => ("200 OK", "text/html", INDEX.into()),
-        (_, "GET", "/api/state") => api(state()),
-        (_, "POST", "/api/test") if from_page => api(web_test()),
-        (_, "POST", "/api/hint") if from_page => api(current_hint().map(|h| json!({ "hint": h }))),
-        _ => ("404 Not Found", "text/plain", "not found".into()),
-    };
+    match (local, method, path) {
+        (false, ..) => Route::Forbidden,
+        (_, "GET", "/") => Route::Index,
+        (_, "GET", "/api/state") if from_page => Route::ApiState,
+        (_, "POST", "/api/test") if from_page => Route::ApiTest,
+        (_, "POST", "/api/hint") if from_page => Route::ApiHint,
+        _ => Route::NotFound,
+    }
+}
+
+fn write_response(
+    w: &mut impl Write,
+    status: &str,
+    ctype: &str,
+    body: &str,
+) -> std::io::Result<()> {
     write!(
-        s,
-        "HTTP/1.1 {status}\r\nContent-Type: {ctype}; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        w,
+        "HTTP/1.1 {status}\r\n\
+         Content-Type: {ctype}; charset=utf-8\r\n\
+         Content-Length: {}\r\n\
+         Cache-Control: no-store\r\n\
+         X-Content-Type-Options: nosniff\r\n\
+         X-Frame-Options: DENY\r\n\
+         Connection: close\r\n\
+         \r\n\
+         {body}",
         body.len()
     )
+}
+
+fn handle(mut s: TcpStream) -> std::io::Result<()> {
+    s.set_read_timeout(Some(Duration::from_secs(5)))?;
+    s.set_write_timeout(Some(Duration::from_secs(30)))?;
+    let buf = read_http_head(&mut s)?;
+    if buf.is_empty() {
+        return Ok(());
+    }
+    let req = String::from_utf8_lossy(&buf);
+    let (status, ctype, body): (&str, &str, String) = match parse_route(&req) {
+        Route::Forbidden => ("403 Forbidden", "text/plain", "forbidden".into()),
+        Route::Index => ("200 OK", "text/html", INDEX.into()),
+        Route::ApiState => api(state()),
+        Route::ApiTest => api(web_test()),
+        Route::ApiHint => api(current_hint().map(|h| json!({ "hint": h }))),
+        Route::NotFound => ("404 Not Found", "text/plain", "not found".into()),
+    };
+    write_response(&mut s, status, ctype, &body)
 }
 
 fn api(r: Result<Value, String>) -> (&'static str, &'static str, String) {
@@ -639,8 +794,7 @@ fn api(r: Result<Value, String>) -> (&'static str, &'static str, String) {
     }
 }
 
-fn state() -> Result<Value, String> {
-    let (p, c) = load()?;
+fn state_value(p: &Progress, c: &Challenge) -> Value {
     // Stages ahead of the learner stay locked: name only.
     let stages: Vec<Value> = c
         .stages
@@ -648,20 +802,112 @@ fn state() -> Result<Value, String> {
         .enumerate()
         .map(|(i, s)| json!({ "name": s.name, "instructions": (i <= p.stage).then_some(&s.instructions) }))
         .collect();
-    Ok(
-        json!({ "title": c.title, "stage": p.stage, "fails": p.fails, "escalate_after": ESCALATE_AFTER, "stages": stages, "last": p.last }),
-    )
+    json!({
+        "title": c.title,
+        "stage": p.stage,
+        "fails": p.fails,
+        "escalate_after": ESCALATE_AFTER,
+        "stages": stages,
+        "last": p.last
+    })
+}
+
+fn state_at(path: &Path) -> Result<Value, String> {
+    let (p, c) = load_from(path)?;
+    Ok(state_value(&p, &c))
+}
+
+fn state() -> Result<Value, String> {
+    state_at(Path::new(PROGRESS))
+}
+
+fn web_test_at(path: &Path) -> Result<Value, String> {
+    let (mut p, c) = load_from(path)?;
+    if p.stage < c.stages.len() {
+        check_with(path, &mut p, &c, build_and_run, review, escalate)?;
+    }
+    state_at(path)
 }
 
 fn web_test() -> Result<Value, String> {
-    let (mut p, c) = load()?;
-    check(&mut p, &c)?;
-    state()
+    web_test_at(Path::new(PROGRESS))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    struct ChunkedReader<'a> {
+        data: &'a [u8],
+        pos: usize,
+        chunk_size: usize,
+    }
+
+    impl Read for ChunkedReader<'_> {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.pos >= self.data.len() {
+                return Ok(0);
+            }
+            let n = (self.data.len() - self.pos)
+                .min(self.chunk_size)
+                .min(buf.len());
+            buf[..n].copy_from_slice(&self.data[self.pos..self.pos + n]);
+            self.pos += n;
+            Ok(n)
+        }
+    }
+
+    struct TempProgress(PathBuf);
+
+    impl TempProgress {
+        fn new(p: &Progress) -> Self {
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            let id = NEXT.fetch_add(1, Ordering::Relaxed);
+            let path = env::temp_dir().join(format!("tutor-test-{}-{id}.toml", std::process::id()));
+            save_to(&path, p).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TempProgress {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+
+    fn wc_challenge_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("challenges/wc")
+    }
+
+    fn sample_progress(stage: usize, fails: usize, last: Option<LastRun>) -> Progress {
+        Progress {
+            challenge: wc_challenge_dir(),
+            run: "echo unused".into(),
+            build: None,
+            stage,
+            fails,
+            last,
+        }
+    }
+
+    fn roundtrip_handle(chunks: &[&[u8]]) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            handle(stream).unwrap();
+        });
+        let mut client = TcpStream::connect(addr).unwrap();
+        for chunk in chunks {
+            client.write_all(chunk).unwrap();
+            client.flush().unwrap();
+        }
+        let mut resp = String::new();
+        client.read_to_string(&mut resp).unwrap();
+        server.join().unwrap();
+        resp
+    }
 
     #[test]
     fn output_compare_ignores_crlf_and_trailing_space() {
@@ -795,5 +1041,268 @@ mod tests {
             let (report, ok) = verify(&dir).unwrap();
             assert!(ok, "{}:\n{report}", dir.display());
         }
+    }
+
+    #[test]
+    fn http_host_header_validation() {
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"),
+            Route::Index
+        );
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHost: localhost:4242\r\n\r\n"),
+            Route::Index
+        );
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHost: 127.0.0.1:4242\r\n\r\n"),
+            Route::Index
+        );
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHOST: LOCALHOST:4242\r\n\r\n"),
+            Route::Index
+        );
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n"),
+            Route::Forbidden
+        );
+        assert_eq!(
+            parse_route("GET / HTTP/1.1\r\nHost: localhost.evil.example:4242\r\n\r\n"),
+            Route::Forbidden
+        );
+        assert_eq!(parse_route("GET / HTTP/1.1\r\n\r\n"), Route::Forbidden);
+    }
+
+    #[test]
+    fn http_api_routes_require_x_tutor_header() {
+        assert_eq!(
+            parse_route("GET /api/state HTTP/1.1\r\nHost: localhost:4242\r\n\r\n"),
+            Route::NotFound
+        );
+        assert_eq!(
+            parse_route("GET /api/state HTTP/1.1\r\nHost: localhost:4242\r\nX-Tutor: 1\r\n\r\n"),
+            Route::ApiState
+        );
+        assert_eq!(
+            parse_route("POST /api/test HTTP/1.1\r\nHost: localhost:4242\r\n\r\n"),
+            Route::NotFound
+        );
+        assert_eq!(
+            parse_route("POST /api/test HTTP/1.1\r\nHost: localhost:4242\r\nx-tutor: 1\r\n\r\n"),
+            Route::ApiTest
+        );
+        assert_eq!(
+            parse_route("POST /api/hint HTTP/1.1\r\nHost: localhost:4242\r\n\r\n"),
+            Route::NotFound
+        );
+        assert_eq!(
+            parse_route("POST /api/hint HTTP/1.1\r\nHost: localhost:4242\r\nX-Tutor: 1\r\n\r\n"),
+            Route::ApiHint
+        );
+    }
+
+    #[test]
+    fn read_http_head_handles_chunked_lf_eof_and_cap() {
+        let mut empty = ChunkedReader {
+            data: b"",
+            pos: 0,
+            chunk_size: 4,
+        };
+        assert!(read_http_head(&mut empty).unwrap().is_empty());
+
+        let raw = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\ntrailing";
+        let mut chunked = ChunkedReader {
+            data: raw,
+            pos: 0,
+            chunk_size: 5,
+        };
+        let got = read_http_head(&mut chunked).unwrap();
+        assert!(has_header_end(&got));
+        assert!(got.len() < raw.len());
+
+        let lf_only = b"GET / HTTP/1.1\nHost: localhost\n\nextra";
+        let mut lf_reader = ChunkedReader {
+            data: lf_only,
+            pos: 0,
+            chunk_size: 7,
+        };
+        let got_lf = read_http_head(&mut lf_reader).unwrap();
+        assert!(has_header_end(&got_lf));
+
+        let oversized = vec![b'A'; 10_000];
+        let mut big_reader = ChunkedReader {
+            data: &oversized,
+            pos: 0,
+            chunk_size: 512,
+        };
+        assert_eq!(read_http_head(&mut big_reader).unwrap().len(), 8192);
+    }
+
+    #[test]
+    fn handle_returns_ok_on_closed_preconnect_socket() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            handle(stream)
+        });
+        let client = TcpStream::connect(addr).unwrap();
+        drop(client);
+        server.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn handle_includes_security_headers_and_handles_split_request() {
+        let resp = roundtrip_handle(&[b"GET / HTTP/1.1\r\n", b"Host: localhost:4242\r\n\r\n"]);
+        assert!(resp.starts_with("HTTP/1.1 200 OK\r\n"));
+        assert!(resp.contains("Cache-Control: no-store\r\n"));
+        assert!(resp.contains("X-Content-Type-Options: nosniff\r\n"));
+        assert!(resp.contains("X-Frame-Options: DENY\r\n"));
+
+        let forbidden = roundtrip_handle(&[b"GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n"]);
+        assert!(forbidden.starts_with("HTTP/1.1 403 Forbidden\r\n"));
+        assert!(forbidden.contains("Cache-Control: no-store\r\n"));
+
+        let missing_header =
+            roundtrip_handle(&[b"GET /api/state HTTP/1.1\r\nHost: localhost:4242\r\n\r\n"]);
+        assert!(missing_header.starts_with("HTTP/1.1 404 Not Found\r\n"));
+    }
+
+    #[test]
+    fn web_test_returns_state_for_completed_course() {
+        let c = read_challenge(&wc_challenge_dir()).unwrap();
+        let tmp = TempProgress::new(&sample_progress(c.stages.len(), 0, None));
+        let state = web_test_at(&tmp.0).unwrap();
+        assert_eq!(state["stage"], c.stages.len());
+        assert_eq!(state["title"], c.title);
+    }
+
+    #[test]
+    fn current_hint_persists_new_and_updates_matching_last_run() {
+        // Case 1: no prior last run -> creates LastRun with hint and persists to tutor.toml
+        let tmp = TempProgress::new(&sample_progress(0, 1, None));
+        let h1 = current_hint_with(
+            &tmp.0,
+            |_, _| ("  FAIL stage 1\n".into(), false),
+            |_, _, rev| {
+                assert_eq!(rev, None);
+                Ok("first hint".into())
+            },
+        )
+        .unwrap();
+        assert_eq!(h1, "first hint");
+        let (p1, _) = load_from(&tmp.0).unwrap();
+        let last1 = p1.last.unwrap();
+        assert_eq!(last1.stage, 0);
+        assert!(!last1.ok);
+        assert_eq!(last1.report, "  FAIL stage 1\n");
+        assert_eq!(last1.review, None);
+        assert_eq!(last1.hint.as_deref(), Some("first hint"));
+
+        // Case 2: matching stage with existing review -> preserves review, updates report/ok/hint
+        let existing = LastRun {
+            stage: 0,
+            ok: false,
+            report: "old report".into(),
+            review: Some("keep this review".into()),
+            hint: Some("old hint".into()),
+        };
+        let tmp2 = TempProgress::new(&sample_progress(0, 1, Some(existing)));
+        let h2 = current_hint_with(
+            &tmp2.0,
+            |_, _| ("new report".into(), true),
+            |_, _, rev| {
+                assert_eq!(rev, Some("keep this review"));
+                Ok("updated hint".into())
+            },
+        )
+        .unwrap();
+        assert_eq!(h2, "updated hint");
+        let (p2, _) = load_from(&tmp2.0).unwrap();
+        let last2 = p2.last.unwrap();
+        assert_eq!(last2.stage, 0);
+        assert!(last2.ok);
+        assert_eq!(last2.report, "new report");
+        assert_eq!(last2.review.as_deref(), Some("keep this review"));
+        assert_eq!(last2.hint.as_deref(), Some("updated hint"));
+
+        // Case 3: prior last run from earlier stage -> replaces with fresh LastRun for current stage
+        let prev_stage = LastRun {
+            stage: 0,
+            ok: true,
+            report: "stage 0 ok".into(),
+            review: Some("old stage review".into()),
+            hint: Some("old stage hint".into()),
+        };
+        let tmp3 = TempProgress::new(&sample_progress(1, 0, Some(prev_stage)));
+        current_hint_with(
+            &tmp3.0,
+            |_, _| ("stage 1 fail".into(), false),
+            |_, _, rev| {
+                assert_eq!(rev, None);
+                Ok("stage 1 hint".into())
+            },
+        )
+        .unwrap();
+        let (p3, _) = load_from(&tmp3.0).unwrap();
+        let last3 = p3.last.unwrap();
+        assert_eq!(last3.stage, 1);
+        assert!(!last3.ok);
+        assert_eq!(last3.report, "stage 1 fail");
+        assert_eq!(last3.review, None);
+        assert_eq!(last3.hint.as_deref(), Some("stage 1 hint"));
+
+        // Case 4: escalate failure does not overwrite persisted last run
+        let err = current_hint_with(
+            &tmp3.0,
+            |_, _| ("still failing".into(), false),
+            |_, _, _| Err("claude unavailable".into()),
+        )
+        .unwrap_err();
+        assert_eq!(err, "claude unavailable");
+        let (p3_after, _) = load_from(&tmp3.0).unwrap();
+        assert_eq!(p3_after.last.unwrap().hint.as_deref(), Some("stage 1 hint"));
+    }
+
+    #[test]
+    fn check_escalation_failure_leaves_hint_none_and_preserves_fail_count() {
+        let mut p = sample_progress(0, ESCALATE_AFTER - 1, None);
+        let c = read_challenge(&p.challenge).unwrap();
+        let tmp = TempProgress::new(&p);
+
+        // Escalation fails: hint stays None and fails is not reset to 0
+        let last = check_with(
+            &tmp.0,
+            &mut p,
+            &c,
+            |_, _| ("  FAIL stage 1\n".into(), false),
+            |_, _| Some("review note".into()),
+            |_, _, _| Err("claude not found".into()),
+        )
+        .unwrap();
+        assert!(!last.ok);
+        assert_eq!(last.hint, None);
+        assert_eq!(p.fails, ESCALATE_AFTER);
+        let (saved, _) = load_from(&tmp.0).unwrap();
+        assert_eq!(saved.fails, ESCALATE_AFTER);
+        assert_eq!(saved.last.unwrap().hint, None);
+
+        // Subsequent escalation succeeds: hint is persisted and fails resets to 0
+        let last2 = check_with(
+            &tmp.0,
+            &mut p,
+            &c,
+            |_, _| ("  FAIL stage 1\n".into(), false),
+            |_, _| None,
+            |_, _, _| Ok("actionable hint".into()),
+        )
+        .unwrap();
+        assert_eq!(last2.hint.as_deref(), Some("actionable hint"));
+        assert_eq!(p.fails, 0);
+        let (saved2, _) = load_from(&tmp.0).unwrap();
+        assert_eq!(saved2.fails, 0);
+        assert_eq!(
+            saved2.last.unwrap().hint.as_deref(),
+            Some("actionable hint")
+        );
     }
 }

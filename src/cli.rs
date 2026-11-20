@@ -15,7 +15,7 @@ options:
   -h, --help                                    print this help text and exit
   -V, --version                                 print version and exit
 
-env: TUTOR_LLM (Ollama URL, default http://localhost:11434, or \"off\"), TUTOR_MODEL (default qwen3.6:35b)";
+env: TUTOR_LLM (Ollama URL, default http://localhost:11434, or \"off\"), TUTOR_MODEL (default qwen3.6:35b), TUTOR_TIMEOUT (per-test seconds, default 30)";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
