@@ -1,14 +1,18 @@
+mod cli;
+
+use cli::{Action, USAGE};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use std::{env, fs};
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 /// Live progress on stderr, so stdout (and the saved report) stay the same with or without -v.
 macro_rules! verbose {
@@ -22,18 +26,6 @@ macro_rules! verbose {
 const PROGRESS: &str = "tutor.toml";
 const ESCALATE_AFTER: usize = 3;
 const INDEX: &str = include_str!("web/index.html");
-const USAGE: &str = "usage:
-  tutor new <slug> <goal...>                    have Claude Code design a course into challenges/<slug>
-  tutor verify <challenge-dir>                  check a course's tests against its reference solution
-  tutor init <challenge-dir> [--build \"<cmd>\"] <run command...>
-                                                start a course in the current folder
-  tutor show                                    print the current stage
-  tutor test                                    build, run tests + local review; advance on pass
-  tutor hint                                    ask Claude Code for help on the current stage
-  tutor serve [port]                            open the web dashboard (default port 4242)
-
--v / --verbose right after the command (e.g. `tutor test -v`) logs each step live; TUTOR_VERBOSE=1 does the same (e.g. for the git hook).
-env: TUTOR_LLM (Ollama URL, default http://localhost:11434, or \"off\"), TUTOR_MODEL (default qwen3.6:35b)";
 
 #[derive(Deserialize)]
 struct Challenge {
@@ -58,7 +50,7 @@ struct Test {
     expect: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 struct LastRun {
     stage: usize,
     ok: bool,
@@ -67,7 +59,7 @@ struct LastRun {
     hint: Option<String>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 struct Progress {
     challenge: PathBuf,
     run: String,
@@ -79,40 +71,41 @@ struct Progress {
 }
 
 fn main() {
-    let mut args: Vec<String> = env::args().skip(1).collect();
-    // Only right after the command, so a `-v` inside a run command passed to `init` is left alone.
-    let flag = args.get(1).is_some_and(|a| a == "-v" || a == "--verbose");
-    if flag {
-        args.remove(1);
-    }
+    let raw: Vec<String> = env::args().skip(1).collect();
+    let parsed = match cli::parse_args(&raw) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
     VERBOSE.store(
-        flag || env::var_os("TUTOR_VERBOSE").is_some(),
+        parsed.verbose || env::var_os("TUTOR_VERBOSE").is_some(),
         Ordering::Relaxed,
     );
-    let result = match args.first().map(String::as_str) {
-        Some("new") if args.len() >= 3 => new(&args[1], &args[2..].join(" ")),
-        Some("verify") if args.len() == 2 => {
-            verify(Path::new(&args[1])).and_then(|(report, ok)| {
-                println!("{report}");
-                if ok {
-                    Ok(())
-                } else {
-                    Err("reference solution fails".into())
-                }
-            })
+    let result = match parsed.action {
+        Action::Help => {
+            println!("{USAGE}");
+            Ok(())
         }
-        Some("init") if args.len() >= 3 => {
-            let (build, run) = match args[2].as_str() {
-                "--build" if args.len() >= 5 => (Some(args[3].clone()), &args[4..]),
-                _ => (None, &args[2..]),
-            };
-            init(&args[1], build, &run.join(" "))
+        Action::Version => {
+            println!("tutor {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
         }
-        Some("show") => load().map(|(p, c)| show(&c, p.stage)),
-        Some("test") => test(),
-        Some("hint") => current_hint().map(|h| println!("{h}")),
-        Some("serve") => serve(args.get(1).map_or("4242", String::as_str)),
-        _ => Err(USAGE.into()),
+        Action::New { slug, goal } => new(&slug, &goal),
+        Action::Verify { dir } => verify(&dir).and_then(|(report, ok)| {
+            println!("{report}");
+            if ok {
+                Ok(())
+            } else {
+                Err("reference solution fails".into())
+            }
+        }),
+        Action::Init { dir, build, run } => init(&dir, build, &run),
+        Action::Show => load().map(|(p, c)| show(&c, p.stage)),
+        Action::Test => test(),
+        Action::Hint => current_hint().map(|h| println!("{h}")),
+        Action::Serve { port } => serve(port),
     };
     if let Err(e) = result {
         eprintln!("{e}");
@@ -126,24 +119,69 @@ fn read_challenge(dir: &Path) -> Result<Challenge, String> {
     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+fn load_progress_from(path: &Path) -> Result<Progress, String> {
+    let text = fs::read_to_string(path)
+        .map_err(|_| format!("no {} here; run `tutor init` first", path.display()))?;
+    toml::from_str(&text).map_err(|e| e.to_string())
+}
+
 fn load() -> Result<(Progress, Challenge), String> {
-    let text = fs::read_to_string(PROGRESS)
-        .map_err(|_| format!("no {PROGRESS} here; run `tutor init` first"))?;
-    let p: Progress = toml::from_str(&text).map_err(|e| e.to_string())?;
+    let p = load_progress_from(Path::new(PROGRESS))?;
     let c = read_challenge(&p.challenge)?;
     Ok((p, c))
 }
 
+fn save_to(path: &Path, p: &Progress) -> Result<(), String> {
+    let data = toml::to_string(p).map_err(|e| e.to_string())?;
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(PROGRESS);
+    let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let tmp = dir.join(format!(".{name}.tmp.{}.{seq}", std::process::id()));
+
+    let write_res = (|| -> std::io::Result<()> {
+        let mut file = fs::File::create(&tmp)?;
+        file.write_all(data.as_bytes())?;
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(e) = write_res {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    if let Err(e) = fs::rename(&tmp, path) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    Ok(())
+}
+
 fn save(p: &Progress) -> Result<(), String> {
-    fs::write(PROGRESS, toml::to_string(p).map_err(|e| e.to_string())?).map_err(|e| e.to_string())
+    save_to(Path::new(PROGRESS), p)
 }
 
 fn new(slug: &str, goal: &str) -> Result<(), String> {
-    let dir = Path::new("challenges").join(slug);
+    new_in(Path::new("challenges"), slug, goal, claude)
+}
+
+fn new_in<F>(root: &Path, slug: &str, goal: &str, mut run_agent: F) -> Result<(), String>
+where
+    F: FnMut(&str, &Path, &[&str]) -> Result<String, String>,
+{
+    cli::validate_slug(slug)?;
+    let dir = root.join(slug);
+    let existed = dir.exists();
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let example = include_str!("../challenges/wc/challenge.toml");
-    let mut prompt = format!(
-        "You are designing a hands-on coding course in the style of codecrafters.io. The learner's goal:
+
+    let result = (|| -> Result<(), String> {
+        let example = include_str!("../challenges/wc/challenge.toml");
+        let mut prompt = format!(
+            "You are designing a hands-on coding course in the style of codecrafters.io. The learner's goal:
 
 {goal}
 
@@ -156,27 +194,33 @@ Also write a reference solution in Python 3 (standard library only) under `refer
 Format example from a different course:
 
 {example}"
-    );
-    for attempt in 1..=3 {
-        println!("Asking Claude Code to design the course (attempt {attempt}/3)...");
-        claude(&prompt, &dir, &["--permission-mode", "acceptEdits"])?;
-        let (report, ok) = verify(&dir).unwrap_or_else(|e| (e, false));
-        println!("{report}");
-        if ok {
-            println!(
-                "Course ready. Start it with: tutor init {} <your run command>",
-                dir.display()
-            );
-            return Ok(());
-        }
-        prompt = format!(
-            "This folder holds a coding course for the goal \"{goal}\", but it failed verification. Fix challenge.toml or reference/ so every test passes, without making the course easier.\n\n{report}"
         );
+        for attempt in 1..=3 {
+            println!("Asking Claude Code to design the course (attempt {attempt}/3)...");
+            run_agent(&prompt, &dir, &["--permission-mode", "acceptEdits"])?;
+            let (report, ok) = verify(&dir).unwrap_or_else(|e| (e, false));
+            println!("{report}");
+            if ok {
+                println!(
+                    "Course ready. Start it with: tutor init {} <your run command>",
+                    dir.display()
+                );
+                return Ok(());
+            }
+            prompt = format!(
+                "This folder holds a coding course for the goal \"{goal}\", but it failed verification. Fix challenge.toml or reference/ so every test passes, without making the course easier.\n\n{report}"
+            );
+        }
+        Err(format!(
+            "Claude couldn't produce a passing course; inspect {} by hand",
+            dir.display()
+        ))
+    })();
+
+    if result.is_err() && !existed && !dir.join("challenge.toml").exists() {
+        let _ = fs::remove_dir_all(&dir);
     }
-    Err(format!(
-        "Claude couldn't produce a passing course; inspect {} by hand",
-        dir.display()
-    ))
+    result
 }
 
 fn verify(dir: &Path) -> Result<(String, bool), String> {
@@ -327,9 +371,12 @@ fn build_and_run(p: &Progress, c: &Challenge) -> (String, bool) {
     if let Some(cmd) = &p.build {
         verbose!("build: $ {cmd}");
         let started = Instant::now();
-        let mut parts = cmd.split_whitespace();
-        let out = match parts.next() {
-            Some(prog) => Command::new(prog).args(parts).output(),
+        let parts = match cli::split_command(cmd) {
+            Ok(parts) => parts,
+            Err(e) => return (format!("  BUILD invalid command `{cmd}`: {e}"), false),
+        };
+        let out = match parts.split_first() {
+            Some((prog, args)) => Command::new(prog).args(args).output(),
             None => return ("  BUILD: empty build command".into(), false),
         };
         match out {
@@ -377,14 +424,15 @@ fn run_stages(run: &str, cwd: &Path, stages: &[Stage]) -> (String, bool) {
     (report, ok)
 }
 
-// shortcut: splits the run command on whitespace (no quoting) and has no timeout; upgrade if challenges need either.
 fn run_test(run: &str, cwd: &Path, t: &Test) -> Result<(), String> {
-    let mut parts = run.split_whitespace();
-    let prog = parts.next().ok_or("empty run command")?;
+    let parts = cli::split_command(run).map_err(|e| format!("    invalid run command: {e}"))?;
+    let (prog, base_args) = parts
+        .split_first()
+        .ok_or_else(|| "empty run command".to_string())?;
     verbose!("test: $ {run} {}  stdin={:?}", t.args.join(" "), t.stdin);
     let started = Instant::now();
     let mut child = Command::new(prog)
-        .args(parts)
+        .args(base_args)
         .args(&t.args)
         .current_dir(cwd)
         .stdin(Stdio::piped())
@@ -404,11 +452,16 @@ fn run_test(run: &str, cwd: &Path, t: &Test) -> Result<(), String> {
         normalize(&t.expect),
         String::from_utf8_lossy(&out.stderr).trim()
     );
-    if matches(&got, &t.expect) {
+    if out.status.success() && matches(&got, &t.expect) {
         return Ok(());
     }
+    let status_line = if out.status.success() {
+        String::new()
+    } else {
+        format!("    status:   {}\n", out.status)
+    };
     Err(format!(
-        "    stdin:    {:?}\n    expected: {:?}\n    got:      {:?}\n    stderr:   {}",
+        "{status_line}    stdin:    {:?}\n    expected: {:?}\n    got:      {:?}\n    stderr:   {}",
         t.stdin,
         normalize(&t.expect),
         normalize(&got),
@@ -527,9 +580,9 @@ fn claude(prompt: &str, cwd: &Path, args: &[&str]) -> Result<String, String> {
 }
 
 // shortcut: single-threaded, so a slow Claude hint blocks other requests; fine for one local learner.
-fn serve(port: &str) -> Result<(), String> {
+fn serve(port: u16) -> Result<(), String> {
     load()?;
-    let listener = TcpListener::bind(format!("127.0.0.1:{port}")).map_err(|e| e.to_string())?;
+    let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|e| e.to_string())?;
     println!("Dashboard: http://localhost:{port}  (Ctrl+C to stop)");
     for stream in listener.incoming().flatten() {
         if let Err(e) = handle(stream) {
@@ -615,6 +668,118 @@ mod tests {
         assert!(matches("3\r\n", "3"));
         assert!(matches("a\r\nb\n\n", "a\nb"));
         assert!(!matches("3", "4"));
+    }
+
+    #[test]
+    fn run_test_fails_on_nonzero_exit_even_when_stdout_matches() {
+        let test = Test {
+            args: vec!["-c".into(), "import sys; print('ok'); sys.exit(1)".into()],
+            stdin: String::new(),
+            expect: "ok".into(),
+        };
+        let err = run_test("python", Path::new("."), &test)
+            .expect_err("non-zero exit code must fail even when stdout matches");
+        assert!(err.contains("status:"), "missing status in error:\n{err}");
+
+        let empty_expect = Test {
+            args: vec!["-c".into(), "import sys; sys.exit(2)".into()],
+            stdin: String::new(),
+            expect: String::new(),
+        };
+        let err2 = run_test("python", Path::new("."), &empty_expect)
+            .expect_err("crashing program with empty expected output must fail");
+        assert!(err2.contains("status:"), "missing status in error:\n{err2}");
+    }
+
+    #[test]
+    fn run_test_handles_quoted_arguments_with_spaces() {
+        let test = Test {
+            args: vec!["arg with spaces".into()],
+            stdin: String::new(),
+            expect: "hello world | arg with spaces".into(),
+        };
+        run_test(
+            r#"python -c "import sys; print('hello world |', sys.argv[1])""#,
+            Path::new("."),
+            &test,
+        )
+        .expect("quoted run command with spaces should execute cleanly");
+    }
+
+    #[test]
+    fn save_to_and_load_progress_round_trip_atomically() {
+        let dir = env::temp_dir().join(format!(
+            "tutor_atomic_test_{}_{}",
+            std::process::id(),
+            TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(PROGRESS);
+
+        let initial = Progress {
+            challenge: PathBuf::from("challenges/wc"),
+            run: "python main.py".into(),
+            build: Some("cargo build --release".into()),
+            stage: 0,
+            fails: 1,
+            last: None,
+        };
+        save_to(&path, &initial).unwrap();
+        assert_eq!(load_progress_from(&path).unwrap(), initial);
+
+        let updated = Progress {
+            challenge: PathBuf::from("challenges/wc"),
+            run: r#""C:\Program Files\Python\python.exe" main.py"#.into(),
+            build: None,
+            stage: 2,
+            fails: 0,
+            last: Some(LastRun {
+                stage: 1,
+                ok: true,
+                report: "  pass stage 2\n".into(),
+                review: Some("Looks clean.".into()),
+                hint: None,
+            }),
+        };
+        save_to(&path, &updated).unwrap();
+        assert_eq!(load_progress_from(&path).unwrap(), updated);
+
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp."))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp files should be cleaned up after atomic rename: {leftovers:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn new_in_rejects_traversal_and_cleans_up_empty_dir_on_failure() {
+        let root = env::temp_dir().join(format!(
+            "tutor_new_cleanup_test_{}_{}",
+            std::process::id(),
+            TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+
+        // Path traversal must be rejected before creating any directory.
+        assert!(new_in(&root, "../escape", "goal", |_, _, _| Ok(String::new())).is_err());
+
+        // Failed agent on a fresh slug must remove the empty directory.
+        let err = new_in(&root, "broken_course", "goal", |_, _, _| {
+            Err("claude failed to start".into())
+        })
+        .unwrap_err();
+        assert!(err.contains("claude failed to start"));
+        assert!(
+            !root.join("broken_course").exists(),
+            "empty directory should be removed when new() fails before creating challenge.toml"
+        );
+
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
