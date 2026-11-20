@@ -4,100 +4,864 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>tutor</title>
+<script>
+try {
+  const savedTheme = localStorage.getItem("tutor-theme");
+  if (savedTheme === "dark" || savedTheme === "light") {
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  }
+} catch {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
 <style>
 :root {
-  --bg: #f6f5f2; --panel: #fff; --ink: #1d1d1b; --muted: #6b6a65; --line: #e3e1db;
-  --accent: #2f6f4f; --accent-ink: #fff; --fail: #b3261e; --code: #efede8;
+  --paper: #eef2e8;
+  --grid: #d6dfcc;
+  --ink: #1b2822;
+  --muted: #5b6a61;
+  --panel: #f8faf4;
+  --panel-alt: #f1f5eb;
+  --rule: #c3cfb8;
+  --signal: #2350c4;
+  --signal-ink: #ffffff;
+  --setpoint: #b2452b;
+  --ok: #256d49;
+  --ok-ink: #ffffff;
+  --warn: #a36200;
+  --fail: #b3261e;
+  --fail-ink: #ffffff;
+  --code-bg: #1d2a24;
+  --code-ink: #e3ebdf;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #141413; --panel: #1d1d1b; --ink: #ecebe6; --muted: #9a988f; --line: #2e2d2a;
-    --accent: #5fb38a; --accent-ink: #0d1f16; --fail: #f2847b; --code: #272623;
+  :root:not([data-theme="light"]) {
+    --paper: #131b17;
+    --grid: #1f2b25;
+    --ink: #e2eadf;
+    --muted: #93a398;
+    --panel: #19231e;
+    --panel-alt: #1f2b25;
+    --rule: #2c3a33;
+    --signal: #84a6ff;
+    --signal-ink: #0d1629;
+    --setpoint: #f08a6c;
+    --ok: #67c594;
+    --ok-ink: #0b2015;
+    --warn: #f0b45b;
+    --fail: #f2847b;
+    --fail-ink: #290d0b;
+    --code-bg: #0c120f;
+    --code-ink: #dce6d8;
+    color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --paper: #131b17;
+  --grid: #1f2b25;
+  --ink: #e2eadf;
+  --muted: #93a398;
+  --panel: #19231e;
+  --panel-alt: #1f2b25;
+  --rule: #2c3a33;
+  --signal: #84a6ff;
+  --signal-ink: #0d1629;
+  --setpoint: #f08a6c;
+  --ok: #67c594;
+  --ok-ink: #0b2015;
+  --warn: #f0b45b;
+  --fail: #f2847b;
+  --fail-ink: #290d0b;
+  --code-bg: #0c120f;
+  --code-ink: #dce6d8;
+  color-scheme: dark;
+}
+
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
-header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
-header h1 { font-size: 16px; margin: 0; font-weight: 600; }
-.bar { flex: 1; max-width: 320px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
-.bar > div { height: 100%; background: var(--accent); transition: width .4s; }
-#count { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
-.wrap { display: grid; grid-template-columns: 270px minmax(0, 1fr); max-width: 1200px; margin: 0 auto; }
-nav { padding: 20px 12px; border-right: 1px solid var(--line); min-height: calc(100vh - 53px); }
-nav button { all: unset; box-sizing: border-box; display: flex; gap: 10px; align-items: center; width: 100%; padding: 8px 10px; border-radius: 6px; cursor: pointer; color: var(--ink); }
-nav button:hover:not(:disabled), nav button[aria-current="true"] { background: var(--code); }
-nav button[aria-current="true"] { font-weight: 600; }
-nav button:disabled { color: var(--muted); cursor: default; }
-nav button:focus-visible, .actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.dot { width: 22px; height: 22px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 11px; border: 1.5px solid var(--line); color: var(--muted); }
-.done .dot { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.current .dot { border-color: var(--accent); color: var(--accent); }
-main { padding: 28px 40px 64px; }
-.kicker { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; }
-main h2 { margin: 4px 0 16px; font-size: 26px; line-height: 1.25; }
-.md { max-width: 72ch; }
-.md code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .9em; }
-.md pre { background: var(--code); padding: 10px 12px; border-radius: 6px; }
-.md pre code { background: none; padding: 0; }
-.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
-.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 28px 0 8px; padding-top: 20px; border-top: 1px solid var(--line); }
-.actions button { font: inherit; padding: 9px 16px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
-.actions .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.actions button:disabled { opacity: .6; cursor: progress; }
-.note { color: var(--muted); font-size: 13px; }
-#error { color: var(--fail); min-height: 1em; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-top: 16px; }
-.card h3 { margin: 0 0 10px; font-size: 14px; display: flex; gap: 8px; align-items: center; }
-.badge { font-size: 12px; padding: 1px 9px; border-radius: 10px; font-weight: 600; }
-.badge.ok { background: var(--accent); color: var(--accent-ink); }
-.badge.bad { background: var(--fail); color: var(--panel); }
-pre { margin: 0; overflow-x: auto; font: 13px/1.5 ui-monospace, Consolas, monospace; white-space: pre-wrap; }
-.line-pass { color: var(--muted); }
-.line-fail { color: var(--fail); font-weight: 600; }
-@media (max-width: 760px) {
-  header { padding: 12px 16px; }
-  .wrap { grid-template-columns: minmax(0, 1fr); }
-  nav { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); display: flex; gap: 4px; overflow-x: auto; padding: 10px 16px; }
-  nav button { width: auto; white-space: nowrap; }
-  main { padding: 20px 16px 48px; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font: 15px/1.65 var(--body);
+}
+a { color: var(--signal); }
+code { font-family: var(--mono); font-size: .88em; }
+button { font: inherit; color: inherit; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+[hidden] { display: none !important; }
+
+/* Topbar */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+}
+.topbar-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.brand-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.brand-mark {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  flex: none;
+}
+.brand-sep {
+  color: var(--rule);
+  font-family: var(--mono);
+  font-size: 14px;
+  user-select: none;
+}
+header h1 {
+  margin: 0;
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 34ch;
+}
+.progress-cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 180px;
+  max-width: 380px;
+}
+.bar {
+  flex: 1;
+  height: 8px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.bar > div {
+  height: 100%;
+  background: var(--signal);
+  transition: width .35s ease, background-color .35s ease;
+}
+.bar.complete > div {
+  background: var(--ok);
+}
+#count {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.header-tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sync-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.sync-pill.live {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--rule));
+  color: var(--ok);
+}
+.sync-pill.live::before { background: var(--ok); }
+.sync-pill.offline {
+  border-color: color-mix(in srgb, var(--fail) 45%, var(--rule));
+  color: var(--fail);
+}
+.sync-pill.offline::before { background: var(--fail); }
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  transition: border-color .15s ease, color .15s ease, background-color .15s ease, opacity .15s ease;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+.btn.primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--signal-ink);
+}
+.btn.primary:hover:not(:disabled) {
+  opacity: .92;
+  color: var(--signal-ink);
+}
+.btn.small {
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.btn:disabled {
+  opacity: .55;
+  cursor: progress;
+}
+
+/* Cockpit Layout */
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 24px 20px 72px;
+  display: grid;
+  grid-template-columns: 288px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Sidebar Stage Rail */
+.sidebar {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-head {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel-alt);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#sidebar-tally {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+nav#stages {
+  padding: 8px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+}
+nav#stages button {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.3;
+  transition: background-color .14s ease, border-color .14s ease;
+}
+nav#stages button:hover:not(:disabled) {
+  background: var(--panel-alt);
+  border-color: var(--rule);
+}
+nav#stages button[aria-current="true"] {
+  background: color-mix(in srgb, var(--signal) 10%, var(--panel-alt));
+  border-color: color-mix(in srgb, var(--signal) 42%, var(--rule));
+  box-shadow: inset 3px 0 0 var(--signal);
+  font-weight: 600;
+}
+nav#stages button:disabled {
+  color: var(--muted);
+  opacity: .68;
+  cursor: default;
+}
+.dot {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--muted);
+}
+.done .dot {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--ok-ink);
+}
+.current .dot {
+  border: 1.5px solid var(--signal);
+  background: color-mix(in srgb, var(--signal) 12%, var(--panel));
+  color: var(--signal);
+}
+.locked .dot {
+  border-style: dashed;
+  background: transparent;
+}
+.stage-text {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 1px;
+}
+.stage-title {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stage-sub {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.sidebar-empty {
+  padding: 16px 10px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Main Workspace */
+main {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.stage-sheet {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 28px 32px;
+}
+.stage-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.kicker-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kicker {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+main h2 {
+  margin: 0 0 20px;
+  font-family: var(--display);
+  font-size: clamp(28px, 3.4vw, 38px);
+  font-weight: 700;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+/* Markdown Prose */
+.md {
+  max-width: 72ch;
+  color: var(--ink);
+}
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md p { margin: 0 0 14px; }
+.md h1, .md h2, .md h3, .md h4 {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 1.15;
+  margin: 22px 0 8px;
+}
+.md h3 { font-size: 22px; }
+.md h4 { font-size: 18px; }
+.md ul, .md ol { margin: 0 0 14px; padding-left: 22px; }
+.md li + li { margin-top: 5px; }
+.md blockquote {
+  margin: 0 0 14px;
+  padding: 8px 14px;
+  border-left: 3px solid var(--signal);
+  background: var(--panel-alt);
+  color: var(--muted);
+}
+.md code {
+  background: var(--panel-alt);
+  border: 1px solid var(--rule);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: .88em;
+}
+.md pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-x: auto;
+  font: 13px/1.55 var(--mono);
+}
+.md pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+.md table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 14px;
+  font-size: 14px;
+  border: 1px solid var(--rule);
+}
+.md th, .md td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+}
+.md th {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  background: var(--panel-alt);
+  color: var(--muted);
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 18px 0;
+}
+
+/* Action Bar */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.action-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.fail-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.fail-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+}
+.fail-pip.lit {
+  background: var(--setpoint);
+  border-color: var(--setpoint);
+}
+.note {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Review Banner (viewing past stage or complete) */
+.review-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background: var(--panel-alt);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-bar.complete {
+  border-color: color-mix(in srgb, var(--ok) 45%, var(--rule));
+  background: color-mix(in srgb, var(--ok) 10%, var(--panel));
+  color: var(--ok);
+}
+
+/* Error Alert */
+#error {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--fail) 45%, var(--rule));
+  border-left: 3px solid var(--fail);
+  background: color-mix(in srgb, var(--fail) 10%, var(--panel));
+  color: var(--fail);
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+#error:empty { display: none; }
+
+/* Results & Feedback Cards */
+#results {
+  display: grid;
+  gap: 16px;
+}
+.context-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--rule));
+  border-left: 3px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.context-banner strong {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--warn);
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.card.card-pass { border-left: 3px solid var(--ok); }
+.card.card-fail { border-left: 3px solid var(--fail); }
+.card.card-review { border-left: 3px solid var(--signal); }
+.card.card-hint { border-left: 3px solid var(--setpoint); }
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel-alt);
+}
+.card-head h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.card-summary {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.card-body {
+  padding: 16px 18px;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border: 1px solid transparent;
+}
+.badge.ok {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+}
+.badge.bad {
+  background: color-mix(in srgb, var(--fail) 16%, transparent);
+  color: var(--fail);
+  border-color: color-mix(in srgb, var(--fail) 45%, transparent);
+}
+.badge.signal {
+  background: color-mix(in srgb, var(--signal) 15%, transparent);
+  color: var(--signal);
+  border-color: color-mix(in srgb, var(--signal) 40%, transparent);
+}
+.badge.hint {
+  background: color-mix(in srgb, var(--setpoint) 16%, transparent);
+  color: var(--setpoint);
+  border-color: color-mix(in srgb, var(--setpoint) 42%, transparent);
+}
+.badge.warn {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 42%, transparent);
+}
+.report-log {
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  overflow-x: auto;
+  font: 13px/1.6 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.report-line {
+  display: block;
+  padding: 1px 6px;
+  margin: 0 -6px;
+  border-radius: 2px;
+}
+.line-pass {
+  color: #96c7aa;
+}
+.line-fail {
+  color: #ffb0a8;
+  background: rgba(242, 132, 123, 0.16);
+  box-shadow: inset 3px 0 0 #f2847b;
+  font-weight: 600;
+  margin-top: 4px;
+}
+.line-detail {
+  color: #cdd8cc;
+  opacity: .9;
+}
+
+@media (max-width: 860px) {
+  .wrap {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px 14px 56px;
+    gap: 16px;
+  }
+  .sidebar {
+    position: static;
+    max-height: none;
+  }
+  nav#stages {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 10px;
+  }
+  nav#stages button {
+    flex: none;
+    width: auto;
+    white-space: nowrap;
+  }
+  .stage-sub { display: none; }
+  .stage-sheet { padding: 20px 18px; }
+  .action-meta { margin-left: 0; }
+}
+@media (max-width: 560px) {
+  .topbar-inner { padding: 10px 14px; gap: 10px; }
+  .progress-cluster { order: 3; max-width: none; flex-basis: 100%; }
+  header h1 { max-width: 22ch; }
 }
 </style>
 </head>
 <body>
 <header>
-  <h1 id="title">tutor</h1>
-  <div class="bar" role="progressbar" aria-label="Course progress"><div id="progress" style="width:0"></div></div>
-  <span id="count"></span>
-</header>
-<div class="wrap">
-  <nav id="stages" aria-label="Stages"></nav>
-  <main>
-    <div class="kicker" id="kicker"></div>
-    <h2 id="stage-name">Loading…</h2>
-    <div id="instructions" class="md"></div>
-    <div class="actions" id="actions">
-      <button class="primary" id="run">Run tests</button>
-      <button id="hint">Ask Claude</button>
-      <span class="note" id="note"></span>
+  <div class="topbar-inner">
+    <div class="brand-group">
+      <span class="brand-mark">tutor</span>
+      <span class="brand-sep" aria-hidden="true">/</span>
+      <h1 id="title">tutor</h1>
     </div>
-    <div id="error" role="alert"></div>
+    <div class="progress-cluster">
+      <div class="bar" id="progress-bar" role="progressbar" aria-label="Course progress" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+        <div id="progress" style="width:0%"></div>
+      </div>
+      <span id="count"></span>
+    </div>
+    <div class="header-tools">
+      <span class="sync-pill" id="sync-pill">Connecting…</span>
+      <button type="button" class="btn small" id="theme-toggle" aria-label="Switch theme">◐ Dark</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="sidebar" aria-label="Course stages">
+    <div class="sidebar-head">
+      <span class="label">Stages</span>
+      <span id="sidebar-tally">0 / 0</span>
+    </div>
+    <nav id="stages" aria-label="Stages"></nav>
+  </aside>
+
+  <main>
+    <article class="stage-sheet">
+      <div class="stage-meta">
+        <div class="kicker-group">
+          <span class="kicker" id="kicker">Loading…</span>
+          <span class="badge" id="stage-pill" hidden></span>
+        </div>
+        <button type="button" class="btn small" id="jump-current" hidden>Back to current stage →</button>
+      </div>
+      <h2 id="stage-name">Loading…</h2>
+      <div id="instructions" class="md"></div>
+      <div class="actions" id="actions">
+        <button type="button" class="btn primary" id="run">Run tests</button>
+        <button type="button" class="btn" id="hint">Ask Claude</button>
+        <div class="action-meta">
+          <div class="fail-pips" id="fail-pips" aria-hidden="true" hidden></div>
+          <span class="note" id="note"></span>
+        </div>
+      </div>
+      <div class="review-bar" id="review-bar" hidden>
+        <span id="review-bar-text"></span>
+      </div>
+      <div id="error" role="alert"></div>
+    </article>
+
     <section id="results" aria-live="polite"></section>
   </main>
 </div>
+
 <script>
 const $ = id => document.getElementById(id);
+const THEME_KEY = "tutor-theme";
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
 let state = null, raw = "", selected = null, busy = false, asked = null;
+
+function getEffectiveTheme() {
+  const explicit = document.documentElement.getAttribute("data-theme");
+  if (explicit === "dark" || explicit === "light") return explicit;
+  return darkQuery.matches ? "dark" : "light";
+}
+
+function updateThemeButton() {
+  const btn = $("theme-toggle");
+  const dark = getEffectiveTheme() === "dark";
+  btn.textContent = dark ? "☀ Light" : "◐ Dark";
+  btn.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+  btn.setAttribute("aria-pressed", String(dark));
+}
+
+$("theme-toggle").addEventListener("click", () => {
+  const next = getEffectiveTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  updateThemeButton();
+});
+darkQuery.addEventListener("change", updateThemeButton);
+updateThemeButton();
 
 // Course text and model output are rendered as sanitized markdown; plain text if the CDN is unreachable.
 function setMd(el, text) {
-  if (window.marked && window.DOMPurify) el.innerHTML = DOMPurify.sanitize(marked.parse(text || ""));
-  else { el.textContent = text || ""; el.style.whiteSpace = "pre-wrap"; }
+  if (window.marked && window.DOMPurify) {
+    el.style.whiteSpace = "";
+    el.innerHTML = DOMPurify.sanitize(marked.parse(text || ""));
+  } else {
+    el.textContent = text || "";
+    el.style.whiteSpace = "pre-wrap";
+  }
+}
+
+function setSyncStatus(mode, text) {
+  const pill = $("sync-pill");
+  pill.className = "sync-pill" + (mode ? " " + mode : "");
+  pill.textContent = text;
 }
 
 async function call(method, path) {
-  const r = await fetch(path, { method, headers: { "X-Tutor": "1" } });
+  const r = await fetch(path, {
+    method,
+    headers: { "X-Tutor": "1" },
+    cache: "no-store"
+  });
   const body = await r.json();
   if (!r.ok) throw new Error(body.error || r.statusText);
   return body;
@@ -106,53 +870,185 @@ async function call(method, path) {
 // Polling picks up runs triggered by the git hook in another terminal.
 async function refresh() {
   if (busy) return;
-  try { apply(await call("GET", "/api/state")); $("error").textContent = ""; }
-  catch (e) { $("error").textContent = "Can't reach `tutor serve`: " + e.message; }
+  try {
+    apply(await call("GET", "/api/state"));
+    $("error").textContent = "";
+    setSyncStatus("live", "Live");
+  } catch (e) {
+    $("error").textContent = "Can't reach `tutor serve`: " + e.message;
+    setSyncStatus("offline", "Offline");
+  }
 }
 
 function apply(s) {
   const json = JSON.stringify(s);
   if (json === raw) return;
+  const stages = Array.isArray(s.stages) ? s.stages : [];
+  const n = stages.length;
   const advanced = state && s.stage !== state.stage;
-  state = s; raw = json;
-  if (selected === null || advanced || selected > s.stage) selected = Math.min(s.stage, s.stages.length - 1);
+  state = s;
+  raw = json;
+  if (n === 0) {
+    selected = null;
+  } else if (selected === null || advanced || selected >= n || selected > s.stage) {
+    selected = Math.max(0, Math.min(s.stage, n - 1));
+  }
   render();
 }
 
-function render() {
-  const s = state, n = s.stages.length, finished = s.stage >= n, st = s.stages[selected];
-  document.title = s.title + " · tutor";
-  $("title").textContent = s.title;
-  $("progress").style.width = (100 * Math.min(s.stage, n) / n) + "%";
-  $("count").textContent = finished ? "Complete" : `Stage ${s.stage + 1} of ${n}`;
+function stageNum(index) {
+  return String(index + 1).padStart(2, "0");
+}
 
-  $("stages").replaceChildren(...s.stages.map((x, i) => {
+function render() {
+  const s = state;
+  if (!s) return;
+  const stages = Array.isArray(s.stages) ? s.stages : [];
+  const n = stages.length;
+  const completed = Math.max(0, Math.min(s.stage, n));
+  const finished = n > 0 && s.stage >= n;
+
+  document.title = (s.title || "tutor") + " · tutor";
+  $("title").textContent = s.title || "tutor";
+
+  const pct = n > 0 ? (100 * completed / n) : 0;
+  const bar = $("progress-bar");
+  bar.classList.toggle("complete", finished);
+  bar.setAttribute("aria-valuemin", "0");
+  bar.setAttribute("aria-valuemax", String(n));
+  bar.setAttribute("aria-valuenow", String(completed));
+  bar.setAttribute(
+    "aria-valuetext",
+    n === 0 ? "No stages" : finished ? `Complete (${n} of ${n} stages)` : `${completed} of ${n} stages completed`
+  );
+  $("progress").style.width = pct + "%";
+  $("count").textContent = n === 0 ? "No stages" : finished ? `Complete · ${n}/${n}` : `Stage ${s.stage + 1} of ${n}`;
+  $("sidebar-tally").textContent = `${completed} / ${n}`;
+
+  if (n === 0) {
+    const empty = document.createElement("div");
+    empty.className = "sidebar-empty";
+    empty.textContent = "No stages defined.";
+    $("stages").replaceChildren(empty);
+    $("kicker").textContent = "Course empty";
+    $("stage-pill").hidden = true;
+    $("jump-current").hidden = true;
+    $("stage-name").textContent = s.title || "No stages available";
+    setMd($("instructions"), "This course does not contain any stages yet.");
+    $("actions").hidden = true;
+    $("review-bar").hidden = true;
+    renderResults(s.last);
+    return;
+  }
+
+  const safeSelected = Math.max(0, Math.min(selected ?? 0, n - 1));
+  selected = safeSelected;
+  const st = stages[selected];
+
+  $("stages").replaceChildren(...stages.map((x, i) => {
     const b = document.createElement("button");
-    b.className = i < s.stage ? "done" : i === s.stage ? "current" : "locked";
+    b.type = "button";
+    const status = i < s.stage ? "done" : i === s.stage ? "current" : "locked";
+    b.className = status;
     b.disabled = i > s.stage;
-    b.setAttribute("aria-current", i === selected);
+    if (i === selected) {
+      b.setAttribute("aria-current", "true");
+    }
+
     const dot = document.createElement("span");
     dot.className = "dot";
-    dot.textContent = i < s.stage ? "✓" : i + 1;
+    dot.setAttribute("aria-hidden", "true");
+    dot.textContent = i < s.stage ? "✓" : stageNum(i);
+
+    const textWrap = document.createElement("span");
+    textWrap.className = "stage-text";
+
     const label = document.createElement("span");
+    label.className = "stage-title";
     label.textContent = x.name;
-    b.append(dot, label);
+
+    const sub = document.createElement("span");
+    sub.className = "stage-sub";
+    sub.textContent = status === "done" ? `Stage ${stageNum(i)} · passed` : status === "current" ? `Stage ${stageNum(i)} · active` : `Stage ${stageNum(i)} · locked`;
+
+    textWrap.append(label, sub);
+    b.append(dot, textWrap);
     b.onclick = () => { selected = i; render(); };
     return b;
   }));
 
-  $("kicker").textContent = finished ? "Course complete" : `Stage ${selected + 1} · ${selected < s.stage ? "passed" : "current"}`;
-  $("stage-name").textContent = st.name;
-  setMd($("instructions"), st.instructions);
-  $("actions").hidden = finished || selected !== s.stage;
+  const viewingPast = !finished && selected < s.stage;
+  $("kicker").textContent = finished
+    ? `Course complete · Stage ${selected + 1} of ${n}`
+    : `Stage ${selected + 1} of ${n}`;
+
+  const pill = $("stage-pill");
+  pill.hidden = false;
+  if (finished) {
+    pill.className = "badge ok";
+    pill.textContent = "Complete";
+  } else if (selected < s.stage) {
+    pill.className = "badge ok";
+    pill.textContent = "Passed";
+  } else {
+    pill.className = "badge signal";
+    pill.textContent = "Current";
+  }
+
+  const jumpBtn = $("jump-current");
+  jumpBtn.hidden = !viewingPast;
+  if (viewingPast) {
+    jumpBtn.textContent = `Back to Stage ${s.stage + 1} →`;
+    jumpBtn.onclick = () => { selected = Math.min(s.stage, n - 1); render(); };
+  }
+
+  $("stage-name").textContent = st ? st.name : "";
+  setMd($("instructions"), st ? st.instructions : "");
+
+  const showActions = !finished && selected === s.stage;
+  $("actions").hidden = !showActions;
+
   const hookNote = "or just commit: the git hook runs the same check";
-  $("note").textContent = s.fails ? `${s.fails} of ${s.escalate_after} failed runs before Claude steps in · ${hookNote}` : hookNote;
+  const escalateAfter = Number(s.escalate_after) || 0;
+  const fails = Number(s.fails) || 0;
+  const pips = $("fail-pips");
+  if (showActions && fails > 0 && escalateAfter > 0) {
+    pips.hidden = false;
+    pips.replaceChildren(...Array.from({ length: escalateAfter }, (_, idx) => {
+      const pip = document.createElement("span");
+      pip.className = "fail-pip" + (idx < fails ? " lit" : "");
+      return pip;
+    }));
+  } else {
+    pips.hidden = true;
+    pips.replaceChildren();
+  }
+  $("note").textContent = fails > 0 && escalateAfter > 0
+    ? `${fails} of ${escalateAfter} failed runs before Claude steps in · ${hookNote}`
+    : hookNote;
+
+  const reviewBar = $("review-bar");
+  const reviewBarText = $("review-bar-text");
+  if (finished) {
+    reviewBar.hidden = false;
+    reviewBar.className = "review-bar complete";
+    reviewBarText.textContent = `All ${n} stages passed. Select any stage on the left to review its specification.`;
+  } else if (viewingPast) {
+    reviewBar.hidden = false;
+    reviewBar.className = "review-bar";
+    reviewBarText.textContent = `Reviewing completed Stage ${selected + 1}. Switch to Stage ${s.stage + 1} to run tests or ask Claude.`;
+  } else {
+    reviewBar.hidden = true;
+  }
+
   renderResults(s.last);
 }
 
-function card(title, badge) {
-  const c = document.createElement("div");
-  c.className = "card";
+function card(title, badge, variant, summaryText) {
+  const c = document.createElement("article");
+  c.className = "card" + (variant ? " " + variant : "");
+  const head = document.createElement("div");
+  head.className = "card-head";
   const h = document.createElement("h3");
   h.textContent = title;
   if (badge) {
@@ -161,53 +1057,157 @@ function card(title, badge) {
     b.textContent = badge[1];
     h.append(b);
   }
-  c.append(h);
+  head.append(h);
+  if (summaryText) {
+    const sum = document.createElement("span");
+    sum.className = "card-summary";
+    sum.textContent = summaryText;
+    head.append(sum);
+  }
+  c.append(head);
   return c;
 }
 
-function mdCard(title, text) {
-  const c = card(title), d = document.createElement("div");
+function mdCard(title, text, badge, variant) {
+  const c = card(title, badge, variant);
+  const body = document.createElement("div");
+  body.className = "card-body";
+  const d = document.createElement("div");
   d.className = "md";
   setMd(d, text);
-  c.append(d);
+  body.append(d);
+  c.append(body);
   return c;
+}
+
+function summarizeReport(reportText) {
+  const lines = (reportText || "").trimEnd().split("\n").filter(Boolean);
+  let passed = 0, failed = 0, buildFailed = false;
+  for (const line of lines) {
+    if (/^\s*pass\b/i.test(line)) passed++;
+    else if (/^\s*FAIL\b/.test(line)) failed++;
+    else if (/^\s*BUILD\b/.test(line)) buildFailed = true;
+  }
+  if (buildFailed) return "Build error";
+  if (passed + failed === 0) return "";
+  if (failed === 0) return `${passed} passed`;
+  return `${failed} failed · ${passed} passed`;
 }
 
 function renderResults(last) {
   const out = $("results");
   out.replaceChildren();
-  if (asked && asked.stage === state.stage) out.append(mdCard("Claude Code hint", asked.text));
+  const stages = state && Array.isArray(state.stages) ? state.stages : [];
+  const n = stages.length;
+
+  const hasAsked = Boolean(asked && selected !== null && asked.stage === selected && asked.text);
+  const duplicateHint = Boolean(
+    hasAsked &&
+    last &&
+    last.stage === selected &&
+    last.hint &&
+    last.hint.trim() === asked.text.trim()
+  );
+
+  if (hasAsked && !duplicateHint) {
+    out.append(mdCard("Claude Code hint", asked.text, ["hint", `Stage ${asked.stage + 1}`], "card-hint"));
+  }
+
   if (!last) return;
-  const c = card(`Last run · stage ${last.stage + 1}`, last.ok ? ["ok", "passed"] : ["bad", "failed"]);
+
+  const wrongStage = selected !== null && last.stage !== selected;
+  const stageTag = `Stage ${last.stage + 1}`;
+
+  if (wrongStage) {
+    const banner = document.createElement("div");
+    banner.className = "context-banner";
+    const msg = document.createElement("span");
+    const prefix = document.createElement("strong");
+    prefix.textContent = `${stageTag} run`;
+    msg.append(
+      prefix,
+      document.createTextNode(
+        ` · These results belong to ${stageTag} (${last.ok ? "passed" : "failed"}), while you are viewing Stage ${selected + 1}.`
+      )
+    );
+    banner.append(msg);
+    if (last.stage >= 0 && last.stage < n && last.stage <= state.stage) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn small";
+      btn.textContent = `View ${stageTag}`;
+      btn.onclick = () => { selected = last.stage; render(); };
+      banner.append(btn);
+    }
+    out.append(banner);
+  }
+
+  const reportText = typeof last.report === "string" ? last.report : "";
+  const summary = summarizeReport(reportText);
+  const c = card(
+    `Last run · ${stageTag}`,
+    last.ok ? ["ok", "passed"] : ["bad", "failed"],
+    last.ok ? "card-pass" : "card-fail",
+    summary
+  );
   const pre = document.createElement("pre");
-  for (const line of last.report.trimEnd().split("\n")) {
+  pre.className = "report-log";
+  for (const line of reportText.trimEnd().split("\n")) {
     const span = document.createElement("span");
-    span.className = /^\s*(FAIL|BUILD)/.test(line) ? "line-fail" : /^\s*pass/.test(line) ? "line-pass" : "";
-    span.textContent = line + "\n";
+    const kind = /^\s*(FAIL|BUILD)\b/.test(line)
+      ? "line-fail"
+      : /^\s*pass\b/i.test(line)
+        ? "line-pass"
+        : "line-detail";
+    span.className = "report-line " + kind;
+    span.textContent = line;
     pre.append(span);
   }
   c.append(pre);
   out.append(c);
-  if (last.review) out.append(mdCard("Reviewer · local model", last.review));
-  if (last.hint) out.append(mdCard("Claude Code · stepped in after repeated failures", last.hint));
+
+  if (last.review) {
+    const reviewTitle = wrongStage
+      ? `Reviewer · ${stageTag} · local model`
+      : "Reviewer · local model";
+    out.append(mdCard(reviewTitle, last.review, ["signal", wrongStage ? stageTag : "review"], "card-review"));
+  }
+  if (last.hint) {
+    const hintTitle = wrongStage
+      ? `Claude Code · ${stageTag} · stepped in after repeated failures`
+      : "Claude Code · stepped in after repeated failures";
+    out.append(mdCard(hintTitle, last.hint, ["hint", wrongStage ? stageTag : "hint"], "card-hint"));
+  }
 }
 
 async function act(button, path, label) {
-  const buttons = document.querySelectorAll(".actions button"), old = button.textContent;
+  const buttons = document.querySelectorAll(".actions button");
+  const old = button.textContent;
   busy = true;
   button.textContent = label;
-  buttons.forEach(b => b.disabled = true);
+  buttons.forEach(b => { b.disabled = true; });
   $("error").textContent = "";
   try {
     const r = await call("POST", path);
-    if (path === "/api/test") { raw = ""; apply(r); }
-    else { asked = { stage: state.stage, text: r.hint }; render(); }
+    if (path === "/api/test") {
+      raw = "";
+      apply(r);
+    } else if (r && Array.isArray(r.stages)) {
+      const persistedHint = r.last && r.last.stage === r.stage && r.last.hint;
+      asked = !persistedHint && typeof r.hint === "string" ? { stage: r.stage, text: r.hint } : null;
+      raw = "";
+      apply(r);
+    } else {
+      asked = { stage: state ? state.stage : 0, text: r && typeof r.hint === "string" ? r.hint : "" };
+      render();
+    }
+    setSyncStatus("live", "Live");
   } catch (e) {
     $("error").textContent = e.message;
   } finally {
     busy = false;
     button.textContent = old;
-    buttons.forEach(b => b.disabled = false);
+    buttons.forEach(b => { b.disabled = false; });
   }
 }
 
