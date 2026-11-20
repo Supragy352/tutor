@@ -1,9 +1,12 @@
+mod process;
+
+use process::ExecError;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use std::{env, fs};
@@ -33,7 +36,7 @@ const USAGE: &str = "usage:
   tutor serve [port]                            open the web dashboard (default port 4242)
 
 -v / --verbose right after the command (e.g. `tutor test -v`) logs each step live; TUTOR_VERBOSE=1 does the same (e.g. for the git hook).
-env: TUTOR_LLM (Ollama URL, default http://localhost:11434, or \"off\"), TUTOR_MODEL (default qwen3.6:35b)";
+env: TUTOR_LLM (Ollama URL, default http://localhost:11434, or \"off\"), TUTOR_MODEL (default qwen3.6:35b), TUTOR_TIMEOUT (per-test seconds, default 30)";
 
 #[derive(Deserialize)]
 struct Challenge {
@@ -387,12 +390,35 @@ fn build_and_run(p: &Progress, c: &Challenge) -> (String, bool) {
         verbose!("build: $ {cmd}");
         let started = Instant::now();
         let mut parts = cmd.split_whitespace();
-        let out = match parts.next() {
-            Some(prog) => Command::new(prog).args(parts).output(),
+        let prog = match parts.next() {
+            Some(prog) => prog,
             None => return ("  BUILD: empty build command".into(), false),
         };
+        let args: Vec<&str> = parts.collect();
+        let out = process::run_command(
+            prog,
+            &args,
+            Path::new("."),
+            None,
+            true,
+            Some(process::build_timeout()),
+        );
         match out {
-            Err(e) => return (format!("  BUILD could not start `{cmd}`: {e}"), false),
+            Err(ExecError::Spawn(e)) => {
+                return (format!("  BUILD could not start `{cmd}`: {e}"), false);
+            }
+            Err(ExecError::TimedOut(d)) => {
+                return (
+                    format!(
+                        "  BUILD timed out after {} `{cmd}`",
+                        process::format_timeout(d)
+                    ),
+                    false,
+                );
+            }
+            Err(ExecError::Io(e)) => {
+                return (format!("  BUILD failed `{cmd}`: {e}"), false);
+            }
             Ok(o) => {
                 let log = format!(
                     "{}{}",
@@ -436,24 +462,31 @@ fn run_stages(run: &str, cwd: &Path, stages: &[Stage]) -> (String, bool) {
     (report, ok)
 }
 
-// shortcut: splits the run command on whitespace (no quoting) and has no timeout; upgrade if challenges need either.
+// shortcut: splits the run command on whitespace (no quoting); tracked separately in issue #3.
 fn run_test(run: &str, cwd: &Path, t: &Test) -> Result<(), String> {
+    run_test_with_timeout(run, cwd, t, process::test_timeout())
+}
+
+fn run_test_with_timeout(run: &str, cwd: &Path, t: &Test, timeout: Duration) -> Result<(), String> {
     let mut parts = run.split_whitespace();
     let prog = parts.next().ok_or("empty run command")?;
+    let mut args: Vec<&str> = parts.collect();
+    args.extend(t.args.iter().map(String::as_str));
     verbose!("test: $ {run} {}  stdin={:?}", t.args.join(" "), t.stdin);
     let started = Instant::now();
-    let mut child = Command::new(prog)
-        .args(parts)
-        .args(&t.args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("    could not start `{run}`: {e}"))?;
-    // Ignore write errors: a program that never reads stdin closes the pipe early.
-    let _ = child.stdin.take().unwrap().write_all(t.stdin.as_bytes());
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let out = process::run_command(
+        prog,
+        &args,
+        cwd,
+        Some(t.stdin.as_bytes()),
+        true,
+        Some(timeout),
+    )
+    .map_err(|e| match e {
+        ExecError::Spawn(err) => format!("    could not start `{run}`: {err}"),
+        ExecError::TimedOut(d) => format!("    timed out after {}", process::format_timeout(d)),
+        ExecError::Io(err) => err.to_string(),
+    })?;
     let got = String::from_utf8_lossy(&out.stdout);
     verbose!(
         "      {} in {:.1?}  stdout={:?}  expected={:?}  stderr={:?}",
@@ -562,21 +595,24 @@ fn claude(prompt: &str, cwd: &Path, args: &[&str]) -> Result<String, String> {
         prompt.len()
     );
     let started = Instant::now();
-    let mut child = Command::new("claude")
-        .arg("-p")
-        .args(args)
-        .current_dir(cwd)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("could not start Claude Code (`claude`): {e}"))?;
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(prompt.as_bytes())
-        .map_err(|e| e.to_string())?;
-    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    let mut full_args = Vec::with_capacity(args.len() + 1);
+    full_args.push("-p");
+    full_args.extend_from_slice(args);
+    let out = process::run_command(
+        "claude",
+        &full_args,
+        cwd,
+        Some(prompt.as_bytes()),
+        false,
+        None,
+    )
+    .map_err(|e| match e {
+        ExecError::Spawn(err) => format!("could not start Claude Code (`claude`): {err}"),
+        ExecError::TimedOut(d) => {
+            format!("Claude Code timed out after {}", process::format_timeout(d))
+        }
+        ExecError::Io(err) => err.to_string(),
+    })?;
     let text = String::from_utf8_lossy(&out.stdout).into_owned();
     verbose!("claude: {} after {:.1?}", out.status, started.elapsed());
     if !out.status.success() {
