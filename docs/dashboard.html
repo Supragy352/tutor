@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mission Control · tutor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Public+Sans:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --paper: #eef2e8;
+  --grid: #d6dfcc;
+  --ink: #1b2822;
+  --muted: #5b6a61;
+  --panel: #f8faf4;
+  --panel-alt: #f1f5eb;
+  --rule: #c3cfb8;
+  --signal: #2350c4;
+  --setpoint: #b2452b;
+  --ok: #256d49;
+  --warn: #a36200;
+  --crit: #b3261e;
+  --code-bg: #1d2a24;
+  --code-ink: #e3ebdf;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e; --panel-alt: #1f2b25;
+    --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b;
+    --code-bg: #0c120f; --code-ink: #dce6d8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #131b17; --grid: #1f2b25; --ink: #e2eadf; --muted: #93a398; --panel: #19231e; --panel-alt: #1f2b25;
+  --rule: #2c3a33; --signal: #84a6ff; --setpoint: #f08a6c; --ok: #67c594; --warn: #f0b45b; --crit: #f2847b;
+  --code-bg: #0c120f; --code-ink: #dce6d8;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font: 15px/1.6 var(--body);
+}
+a { color: var(--signal); }
+code { font-family: var(--mono); font-size: .88em; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; line-height: 1.08; margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+.topbar {
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar-inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.brand-group { display: flex; align-items: baseline; gap: 12px; }
+.topbar-brand { font-family: var(--display); font-weight: 700; font-size: 24px; text-decoration: none; color: var(--ink); }
+.sync-pill {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--muted);
+}
+.sync-pill.live { border-color: var(--ok); color: var(--ok); }
+.topbar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; }
+.topbar-actions a { text-decoration: none; color: var(--muted); padding: 4px 8px; }
+.topbar-actions a:hover, .topbar-actions a[aria-current="page"] { color: var(--signal); }
+.btn {
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+}
+.btn:hover { border-color: var(--signal); color: var(--signal); }
+.btn.primary { background: var(--signal); border-color: var(--signal); color: #fff; }
+.btn.primary:hover { opacity: .92; color: #fff; }
+.btn.small { padding: 4px 9px; font-size: 11px; }
+
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 20px 80px;
+  display: grid;
+  gap: 28px;
+}
+
+.hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.hero-head h1 { font-size: clamp(36px, 5vw, 54px); margin-top: 4px; }
+.hero-sub { color: var(--muted); max-width: 68ch; margin: 6px 0 0; }
+
+/* KPI Strip */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.kpi-val {
+  font-family: var(--display);
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.kpi-val small { font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--muted); }
+.kpi-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; }
+.bar-track { height: 7px; background: var(--paper); border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; display: flex; }
+.bar-seg { height: 100%; transition: width .35s ease; }
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+.tab {
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 13px;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  top: 1px;
+}
+.tab:hover { color: var(--ink); }
+.tab[aria-selected="true"] {
+  background: var(--panel);
+  border-color: var(--rule);
+  color: var(--signal);
+  font-weight: 600;
+}
+.tab .count {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--muted);
+}
+.tab[aria-selected="true"] .count { background: var(--signal); color: #fff; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 20px;
+  display: grid;
+  gap: 18px;
+}
+.panel[hidden] { display: none; }
+
+/* Filters */
+.controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.controls input[type="search"], .controls select {
+  padding: 7px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  font-size: 13px;
+}
+.controls input[type="search"] { flex: 1; min-width: 200px; }
+.view-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 4px; overflow: hidden; margin-left: auto; }
+.view-toggle button { border: 0; background: var(--paper); padding: 6px 11px; font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--muted); }
+.view-toggle button[aria-pressed="true"] { background: var(--signal); color: #fff; }
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.sev-critical { background: color-mix(in srgb, var(--crit) 16%, transparent); color: var(--crit); border-color: color-mix(in srgb, var(--crit) 40%, transparent); }
+.sev-high { background: color-mix(in srgb, var(--setpoint) 16%, transparent); color: var(--setpoint); border-color: color-mix(in srgb, var(--setpoint) 40%, transparent); }
+.sev-medium { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.sev-low { background: var(--paper); color: var(--muted); border-color: var(--rule); }
+.state-open { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.state-closed { background: color-mix(in srgb, var(--signal) 14%, transparent); color: var(--signal); border-color: color-mix(in srgb, var(--signal) 35%, transparent); }
+.status-covered { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.status-partial { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.status-planned { background: var(--paper); color: var(--muted); border-color: var(--rule); }
+.tag { font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--rule); background: var(--paper); color: var(--muted); }
+
+/* Issue Table */
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 4px; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--panel-alt); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--panel-alt); }
+.issue-num { font-family: var(--mono); font-weight: 600; color: var(--muted); white-space: nowrap; }
+.issue-title { font-weight: 600; color: var(--ink); }
+.issue-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+
+/* Kanban Board */
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.col {
+  background: var(--panel-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.col-head h3 { font-size: 19px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 11px;
+  display: grid;
+  gap: 8px;
+  cursor: pointer;
+}
+.card:hover { border-color: var(--signal); }
+.card-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.card-title { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+
+/* BYOX Grid */
+.byox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+.byox-card {
+  background: var(--panel-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.byox-card.is-covered { border-left: 3px solid var(--ok); background: var(--panel); }
+.byox-card.is-partial { border-left: 3px solid var(--warn); background: var(--panel); }
+.byox-head { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+.byox-head h3 { font-size: 20px; }
+.byox-meta { font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; }
+.byox-desc { font-size: 13px; color: var(--muted); margin: 0; }
+.byox-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+
+/* Pipeline */
+.pipeline-flow {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--panel-alt);
+}
+.pipe-step {
+  padding: 14px;
+  border-right: 1px solid var(--rule);
+  display: grid;
+  gap: 5px;
+  align-content: start;
+}
+.pipe-step:last-child { border-right: 0; }
+.pipe-step strong { font-family: var(--display); font-size: 19px; }
+.pipe-step p { margin: 0; font-size: 12.5px; color: var(--muted); }
+
+/* Pillars */
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.pillar {
+  background: var(--panel-alt);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+.pillar h3 { font-size: 24px; color: var(--signal); }
+.pillar ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 14px; }
+
+/* Drawer */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 16, 13, 0.55);
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+}
+.drawer-backdrop[hidden] { display: none; }
+.drawer {
+  width: min(620px, 100%);
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--rule);
+  padding: 24px;
+  overflow-y: auto;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.drawer-head { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.drawer h2 { font-size: 28px; }
+.drawer pre {
+  margin: 0;
+  padding: 14px;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 4px;
+  font: 12.5px/1.55 var(--mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.drawer-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.empty { text-align: center; padding: 32px 16px; color: var(--muted); font-family: var(--mono); font-size: 13px; }
+footer { font-family: var(--mono); font-size: 12px; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 16px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+
+@media (max-width: 960px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pipeline-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pipe-step { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .pillars { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .kpis { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+</head>
+<body>
+<nav class="topbar" aria-label="Site navigation">
+  <div class="topbar-inner">
+    <div class="brand-group">
+      <a class="topbar-brand" href="./index.html">tutor</a>
+      <span class="sync-pill" id="sync-status">Loading snapshot…</span>
+    </div>
+    <div class="topbar-actions">
+      <a href="./index.html">Overview</a>
+      <a href="./dashboard.html" aria-current="page">Mission Control</a>
+      <a href="https://github.com/Supragy352/tutor/issues" target="_blank" rel="noopener">GitHub Issues</a>
+      <a href="https://github.com/Supragy352/tutor/actions" target="_blank" rel="noopener">Actions</a>
+      <button type="button" class="btn small" id="btn-sync">↻ Sync GitHub</button>
+      <button type="button" class="btn small" id="btn-theme" title="Toggle light/dark theme">◐ Theme</button>
+    </div>
+  </div>
+</nav>
+
+<main class="page">
+  <header class="hero-head">
+    <div>
+      <span class="label">Supragy352/tutor · Engineering Tracker</span>
+      <h1>Mission Control</h1>
+      <p class="hero-sub">Live tracker for open issues, CI/CD builds &amp; deployments, strategic tracks (Design, Reasoning, Course Structure), and complete coverage of <code>codecrafters-io/build-your-own-x</code>.</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn primary" href="https://github.com/Supragy352/tutor/issues/new" target="_blank" rel="noopener">+ New Issue</a>
+      <a class="btn" href="https://github.com/codecrafters-io/build-your-own-x" target="_blank" rel="noopener">Build Your Own X ↗</a>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Summary metrics">
+    <article class="kpi">
+      <span class="label">Issues</span>
+      <div class="kpi-val"><span id="kpi-open">—</span> <small id="kpi-closed">— closed</small></div>
+      <div class="bar-track" id="kpi-sev-bar" aria-label="Severity distribution"></div>
+      <div class="kpi-meta" id="kpi-sev-meta"></div>
+    </article>
+
+    <article class="kpi">
+      <span class="label">CI/CD &amp; Deploy</span>
+      <div class="kpi-val"><span id="kpi-ci-status">—</span> <small id="kpi-ci-meta">GitHub Actions</small></div>
+      <div class="kpi-meta" id="kpi-ci-detail">Checking latest workflow runs…</div>
+    </article>
+
+    <article class="kpi">
+      <span class="label">Build Your Own X Coverage</span>
+      <div class="kpi-val"><span id="kpi-byox-pct">—</span> <small id="kpi-byox-count">of 30 categories</small></div>
+      <div class="bar-track" id="kpi-byox-bar" aria-label="Build your own X coverage"></div>
+      <div class="kpi-meta" id="kpi-byox-meta"></div>
+    </article>
+
+    <article class="kpi">
+      <span class="label">Bundled Courses</span>
+      <div class="kpi-val">3 <small>35 verified stages</small></div>
+      <div class="kpi-meta">
+        <span><code>wc</code> (3)</span>
+        <span><code>pid</code> (8)</span>
+        <span><code>rl</code> (24)</span>
+      </div>
+    </article>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Dashboard views">
+    <button type="button" class="tab" role="tab" id="tab-issues" aria-controls="panel-issues" aria-selected="true">Issues <span class="count" id="cnt-issues">0</span></button>
+    <button type="button" class="tab" role="tab" id="tab-byox" aria-controls="panel-byox" aria-selected="false">Build Your Own X <span class="count" id="cnt-byox">30</span></button>
+    <button type="button" class="tab" role="tab" id="tab-cicd" aria-controls="panel-cicd" aria-selected="false">CI/CD &amp; Deploy <span class="count" id="cnt-runs">0</span></button>
+    <button type="button" class="tab" role="tab" id="tab-roadmap" aria-controls="panel-roadmap" aria-selected="false">Design · Reasoning · Courses</button>
+  </div>
+
+  <!-- TAB 1: ISSUES -->
+  <section class="panel" id="panel-issues" role="tabpanel" aria-labelledby="tab-issues">
+    <div class="controls">
+      <input type="search" id="f-search" placeholder="Search issues by title, #number, file, or keyword…" aria-label="Search issues">
+      <select id="f-state" aria-label="Filter by state">
+        <option value="open" selected>Open</option>
+        <option value="closed">Closed</option>
+        <option value="all">All states</option>
+      </select>
+      <select id="f-sev" aria-label="Filter by severity">
+        <option value="all">All severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <select id="f-track" aria-label="Filter by workstream">
+        <option value="all">All tracks</option>
+        <option value="Core Runner">Core Runner</option>
+        <option value="Reasoning & AI">Reasoning &amp; AI</option>
+        <option value="Design & Web">Design &amp; Web</option>
+        <option value="Course Structure">Course Structure</option>
+        <option value="CI/CD & Deploy">CI/CD &amp; Deploy</option>
+      </select>
+      <div class="view-toggle" role="group" aria-label="Issue layout">
+        <button type="button" id="view-table" aria-pressed="true">Table</button>
+        <button type="button" id="view-board" aria-pressed="false">Board</button>
+      </div>
+    </div>
+    <div id="issues-container"></div>
+  </section>
+
+  <!-- TAB 2: BUILD YOUR OWN X -->
+  <section class="panel" id="panel-byox" role="tabpanel" aria-labelledby="tab-byox" hidden>
+    <div class="controls">
+      <input type="search" id="byox-search" placeholder="Filter all 30 Build Your Own X categories…" aria-label="Search Build Your Own X categories">
+      <select id="byox-status" aria-label="Filter by coverage status">
+        <option value="all">All statuses</option>
+        <option value="covered">Covered</option>
+        <option value="partial">Partial</option>
+        <option value="planned">Planned</option>
+      </select>
+      <select id="byox-harness" aria-label="Filter by harness requirement">
+        <option value="all">All harness modes</option>
+        <option value="stdin/stdout">stdin/stdout</option>
+        <option value="Filesystem / CLI">Filesystem / CLI</option>
+        <option value="Network / HTTP / TCP">Network / HTTP / TCP</option>
+        <option value="Interactive / REPL / PTY">Interactive / REPL / PTY</option>
+        <option value="Graphics / Binary / Hardware">Graphics / Binary / Hardware</option>
+      </select>
+    </div>
+    <div class="byox-grid" id="byox-grid"></div>
+  </section>
+
+  <!-- TAB 3: CI/CD & DEPLOY -->
+  <section class="panel" id="panel-cicd" role="tabpanel" aria-labelledby="tab-cicd" hidden>
+    <div>
+      <span class="label">Automated Pipeline</span>
+      <h2 style="font-size:28px;margin-top:4px">Build, Verification &amp; Deployment Flow</h2>
+    </div>
+    <div class="pipeline-flow">
+      <div class="pipe-step"><span class="label">01 · Format</span><strong>cargo fmt</strong><p>Enforces Rust formatting across <code>src/</code> on every push &amp; PR.</p></div>
+      <div class="pipe-step"><span class="label">02 · Lint</span><strong>clippy -D</strong><p>Zero-warning lint pass on <code>--all-targets --locked</code>.</p></div>
+      <div class="pipe-step"><span class="label">03 · Build</span><strong>Ubuntu + Win</strong><p>Compiles locked release/dev targets on Linux and Windows runners.</p></div>
+      <div class="pipe-step"><span class="label">04 · Verify</span><strong>35 Stages</strong><p>Runs <code>wc</code>, <code>pid</code>, and <code>rl</code> reference solutions with <code>TUTOR_LLM=off</code>.</p></div>
+      <div class="pipe-step"><span class="label">05 · Docs Check</span><strong>HTML5 Gate</strong><p>Verifies doctype, UTF-8 charset, and viewport meta on <code>docs/</code>.</p></div>
+      <div class="pipe-step"><span class="label">06 · Deploy</span><strong>GitHub Pages</strong><p>Publishes <code>docs/index.html</code> &amp; <code>dashboard.html</code> on push to <code>main</code>.</p></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <h3 style="font-size:22px">Recent Workflow Runs</h3>
+      <a class="btn small" href="https://github.com/Supragy352/tutor/actions" target="_blank" rel="noopener">Open GitHub Actions ↗</a>
+    </div>
+    <div class="table-wrap" id="runs-container"></div>
+  </section>
+
+  <!-- TAB 4: DESIGN, REASONING, COURSES -->
+  <section class="panel" id="panel-roadmap" role="tabpanel" aria-labelledby="tab-roadmap" hidden>
+    <div>
+      <span class="label">Strategic Direction · Synced with AGENTS.md</span>
+      <h2 style="font-size:28px;margin-top:4px">Four Active Workstreams</h2>
+    </div>
+    <div class="pillars">
+      <article class="pillar">
+        <span class="label">Track 01 · Design</span>
+        <h3>Unified Learner &amp; Mission Control UX</h3>
+        <ul>
+          <li>Polish local learner cockpit (<code>src/web/index.html</code>): stage-scoped test results, live progress streaming, full ARIA accessibility, offline Markdown rendering.</li>
+          <li>Maintain the engineering computation pad visual language across <code>docs/index.html</code> and <code>docs/dashboard.html</code>.</li>
+          <li>Interactive course widgets (like the PID step-response oscilloscope) verified 1:1 against course specs.</li>
+        </ul>
+      </article>
+      <article class="pillar">
+        <span class="label">Track 02 · Reasoning Handling</span>
+        <h3>Configurable Multi-Tier AI Tutor</h3>
+        <ul>
+          <li>Decouple from Ollama/Claude-only lock-in: support OpenAI-compatible <code>/v1/chat/completions</code> endpoints and configurable CLI tutor commands.</li>
+          <li>Make reasoning/thinking token modes explicit and configurable (instead of hardcoded <code>"think": false</code>), separating fast diff feedback from deep Socratic hints.</li>
+          <li>Feed uncommitted diffs (<code>git diff HEAD</code>), exit statuses, and persisted hint history so reasoning models never review stale code.</li>
+        </ul>
+      </article>
+      <article class="pillar">
+        <span class="label">Track 03 · Course Structure</span>
+        <h3>Modular Schema &amp; Multi-Mode Test Harness</h3>
+        <ul>
+          <li>Refactor single-file <code>src/main.rs</code> into clean Rust modules (<code>cli</code>, <code>runner</code>, <code>llm</code>, <code>server</code>, <code>challenge</code>, <code>progress</code>) with timeouts and safe pipe I/O.</li>
+          <li>Extend <code>challenge.toml</code> beyond <code>stdin</code>/<code>stdout</code> to support interactive REPL/PTY sessions, TCP/HTTP servers, filesystem assertions, and framebuffer/image checks.</li>
+          <li>Support multi-file course directories (<code>stages/*.md</code>, fixtures, language-specific test harnesses) while keeping <code>tutor verify</code> deterministic.</li>
+        </ul>
+      </article>
+      <article class="pillar">
+        <span class="label">Track 04 · Build Your Own X</span>
+        <h3>30/30 Category Coverage Roadmap</h3>
+        <ul>
+          <li><strong>Wave 1 (stdin/stdout):</strong> Regex Engine, Programming Language (Lisp/Interpreter), Template Engine, Search Engine, Blockchain, Memory Allocator, AI Model (Transformer).</li>
+          <li><strong>Wave 2 (Filesystem &amp; CLI):</strong> Git, Database (SQLite/LSM-tree), Shell, Text Editor, Emulator/VM.</li>
+          <li><strong>Wave 3 (Network &amp; Distributed):</strong> Web Server (HTTP), BitTorrent Client, Distributed Systems (Raft/KV), Network Stack (TCP/IP), Bot.</li>
+          <li><strong>Wave 4 (Systems &amp; Visual):</strong> Docker (Namespaces), OS, Processor, 3D Renderer, Physics Engine, Voxel Engine, Game, Visual Recognition, AR, Web Browser, Front-end Framework.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <footer>
+    <span>Repository: <a href="https://github.com/Supragy352/tutor" target="_blank" rel="noopener">Supragy352/tutor</a> · Agent Spec: <a href="https://github.com/Supragy352/tutor/blob/main/AGENTS.md" target="_blank" rel="noopener">AGENTS.md</a></span>
+    <span id="footer-note">Powered by GitHub REST API with local snapshot fallback.</span>
+  </footer>
+</main>
+
+<!-- ISSUE DETAIL DRAWER -->
+<div class="drawer-backdrop" id="drawer-backdrop" hidden>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+    <div class="drawer-head">
+      <div>
+        <div class="issue-tags" id="drawer-badges"></div>
+        <h2 id="drawer-title" style="margin-top:8px"></h2>
+      </div>
+      <button type="button" class="btn small" id="drawer-close" aria-label="Close issue details">✕ Close</button>
+    </div>
+    <div class="drawer-actions">
+      <a class="btn primary small" id="drawer-gh" href="#" target="_blank" rel="noopener">Open on GitHub ↗</a>
+      <button type="button" class="btn small" id="drawer-copy-prompt">Copy Agent Prompt</button>
+    </div>
+    <pre id="drawer-body"></pre>
+  </aside>
+</div>
+
+<script>
+const REPO = "Supragy352/tutor";
+
+// Embedded fallback snapshot of the 20 GitHub issues so the dashboard works offline or when rate-limited.
+const FALLBACK_ISSUES = [
+  { number: 1, state: "open", title: "Child process execution has no timeout and can deadlock on OS pipe buffers", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/1", body: "### Severity\n**Critical**\n\n### Affected Files\n- src/main.rs (build_and_run, run_test, claude)\n\n### Acceptance Criteria\n- [ ] Write stdin in a background thread so EOF is delivered while stdout/stderr drain concurrently.\n- [ ] Add configurable per-test timeout (default 30s, TUTOR_TIMEOUT env var) with child.kill() + wait().\n- [ ] Add unit tests covering large pipe I/O and timeouts." },
+  { number: 2, state: "open", title: "run_test ignores child exit status (crashing programs pass if stdout matches)", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/2", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (run_test lines 325-345)\n\n### Acceptance Criteria\n- [ ] Require out.status.success() && matches(&got, &t.expect).\n- [ ] Include exit status in failure report.\n- [ ] Add unit test for crashing child with matching stdout." },
+  { number: 3, state: "open", title: "Naive split_whitespace() command splitting breaks paths with spaces and quoted arguments", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/3", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (main, build_and_run, run_test)\n\n### Acceptance Criteria\n- [ ] Use quote-aware command splitting (e.g. shlex or custom parser).\n- [ ] Preserve argument boundaries in tutor init.\n- [ ] Add unit tests for paths with spaces and quoted flags." },
+  { number: 4, state: "open", title: "Non-atomic tutor.toml writes in save() cause race conditions with tutor serve polling", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/4", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (load / save lines 120-129)\n\n### Acceptance Criteria\n- [ ] Write tutor.toml via temp file + atomic fs::rename.\n- [ ] Add save/load round-trip unit test." },
+  { number: 5, state: "open", title: "CLI argument parser bugs: --build fallthrough, flag positions, --help exit code, and slug path traversal", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/5", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (main, new)\n\n### Acceptance Criteria\n- [ ] Reject --build with missing run command.\n- [ ] Support -v/--verbose, -h/--help (exit 0), -V/--version cleanly (e.g. clap).\n- [ ] Validate slug in tutor new to block path traversal and clean up empty dirs on failure." },
+  { number: 6, state: "open", title: "Git hook installation issues on Windows (\\\\?\\ verbatim prefix), worktrees, and missing .git/hooks", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/6", body: "### Severity\n**Medium**\n\n### Affected Files\n- src/main.rs (init, install_hook)\n\n### Acceptance Criteria\n- [ ] Strip \\\\?\\ prefix on Windows canonicalized paths.\n- [ ] Ensure .git/hooks exists and single-quote exe path in #!/bin/sh." },
+  { number: 7, state: "open", title: "claude() fails to capture stderr and exits early on BrokenPipe before reading exit error", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/7", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (escalate, claude)\n\n### Acceptance Criteria\n- [ ] Pipe stderr in claude().\n- [ ] Ignore stdin BrokenPipe so wait_with_output() always reaps child and captures stderr.\n- [ ] Include both stderr and stdout in returned errors." },
+  { number: 8, state: "open", title: "last_commit_diff() reviews stale HEAD on uncommitted runs and includes tutor.toml noise", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/8", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (last_commit_diff, review)\n\n### Acceptance Criteria\n- [ ] Check git diff HEAD first (excluding tutor.toml) before falling back to git show HEAD.\n- [ ] Append truncation marker beyond 12,000 chars.\n- [ ] Normalize TUTOR_LLM URL trailing slash and case-insensitive 'off'." },
+  { number: 9, state: "open", title: "current_hint() discards hints instead of saving to tutor.toml, and failed escalation pollutes LastRun.hint", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/9", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (check, current_hint), src/web/index.html\n\n### Acceptance Criteria\n- [ ] Persist current_hint() output into p.last in tutor.toml.\n- [ ] Keep hint = None when auto-escalation fails instead of storing error string in LastRun.hint." },
+  { number: 10, state: "open", title: "HTTP server handle() lacks socket read/write timeouts, X-Tutor check on /api/state, and completed-course handling in web_test()", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/10", body: "### Severity\n**High**\n\n### Affected Files\n- src/main.rs (handle, web_test)\n\n### Acceptance Criteria\n- [ ] Set read/write timeouts on TcpStream in handle().\n- [ ] Require X-Tutor header on GET /api/state and add Cache-Control: no-store.\n- [ ] Handle already-finished courses gracefully in web_test()." },
+  { number: 11, state: "open", title: "Interactive PID simulator in docs/index.html violates Stage 5 anti-windup specification", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/11", body: "### Severity\n**High**\n\n### Affected Files\n- docs/index.html (lines 260-278)\n\n### Acceptance Criteria\n- [ ] Add error-sign check ((u_tent > hi && e > 0) || (u_tent < lo && e < 0)) and recompute u with kept integral before clamping." },
+  { number: 12, state: "open", title: "docs/index.html renders in browser Quirks Mode and lacks <meta charset='utf-8'> and viewport meta tag", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/12", body: "### Severity\n**Medium**\n\n### Affected Files\n- docs/index.html\n\n### Acceptance Criteria\n- [ ] Add <!doctype html>, <html lang='en'>, <head>, <meta charset='utf-8'>, viewport meta, and body { margin: 0; }." },
+  { number: 13, state: "open", title: "Web dashboard stage selection context and accessibility fixes in src/web/index.html", labels: [{ name: "bug" }, { name: "accessibility" }], html_url: "https://github.com/Supragy352/tutor/issues/13", body: "### Severity\n**Medium**\n\n### Affected Files\n- src/web/index.html\n\n### Acceptance Criteria\n- [ ] Scope rendered hints/reviews to selected stage or label them clearly.\n- [ ] Add aria-valuemin/max/now to progressbar and fix aria-current on nav buttons." },
+  { number: 14, state: "open", title: "Harden CI workflow with TUTOR_LLM=off, rustfmt check, and clippy lint check", labels: [{ name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/14", body: "### Severity\n**Medium**\n\n### Affected Files\n- .github/workflows/ci.yml\n\n### Acceptance Criteria\n- [ ] Add TUTOR_LLM: off env var.\n- [ ] Add cargo fmt --check and cargo clippy --all-targets --locked -- -D warnings." },
+  { number: 15, state: "open", title: "Fix off-by-one stage numbers in challenges/rl/reference/main.py section comments", labels: [{ name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/15", body: "### Severity\n**Low**\n\n### Affected Files\n- challenges/rl/reference/main.py\n\n### Acceptance Criteria\n- [ ] Align section comments with stages 1-24 in challenges/rl/challenge.toml." },
+  { number: 16, state: "open", title: "Use separate evaluation environment in RL reference solution (DQN Stage 16 & PPO Stages 21-22) and clarify eval RNG lifetime", labels: [{ name: "bug" }, { name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/16", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/reference/main.py, challenges/rl/challenge.toml\n\n### Acceptance Criteria\n- [ ] Evaluate on a separate env instance in cmd_dqn and ppo.\n- [ ] Clarify single eval_rng lifetime in Stage 10." },
+  { number: 17, state: "open", title: "Clarify batch-mean gradient scaling in RL Stage 12 (Backprop/SGD) and clipped gradient tie rule in Stage 21 (PPO)", labels: [{ name: "documentation" }], html_url: "https://github.com/Supragy352/tutor/issues/17", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/challenge.toml\n\n### Acceptance Criteria\n- [ ] Document dividing output-layer gradient by batch size N in Stage 12.\n- [ ] Explicitly specify <= tie rule for unclipped PPO gradient in Stage 21." },
+  { number: 18, state: "open", title: "Prevent numerical underflow (log(0) / 0 * -inf = NaN) in Categorical policy (RL Stage 17)", labels: [{ name: "bug" }], html_url: "https://github.com/Supragy352/tutor/issues/18", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/rl/reference/main.py\n\n### Acceptance Criteria\n- [ ] Use log-sum-exp for log_p and avoid 0 * -inf in entropy." },
+  { number: 19, state: "open", title: "Add missing edge-case tests in challenges/wc and challenges/pid Stage 5 anti-windup", labels: [{ name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/19", body: "### Severity\n**Medium**\n\n### Affected Files\n- challenges/wc/challenge.toml, challenges/pid/challenge.toml\n\n### Acceptance Criteria\n- [ ] Add non-newline final line & empty/tab word count tests to wc.\n- [ ] Add PI-only saturation unwinding test cases to pid Stage 5." },
+  { number: 20, state: "open", title: "Clarify single-line output formatting in RL Stages 6-9, validate empty challenges in read_challenge, and update .gitignore", labels: [{ name: "documentation" }, { name: "enhancement" }], html_url: "https://github.com/Supragy352/tutor/issues/20", body: "### Severity\n**Low**\n\n### Affected Files\n- challenges/rl/challenge.toml, src/main.rs, .gitignore\n\n### Acceptance Criteria\n- [ ] Clarify single-line space-separated output in RL Stages 6-9.\n- [ ] Validate non-empty stages/tests in read_challenge().\n- [ ] Update .gitignore." }
+];
+
+// Complete 30-category catalog from https://github.com/codecrafters-io/build-your-own-x
+const BYOX_CATEGORIES = [
+  { name: "3D Renderer", status: "planned", course: "challenges/renderer", stages: "8–10 planned", harness: "Graphics / Binary / Hardware", desc: "Software rasterizer or raytracer outputting deterministic PPM/PNG frames and depth buffers." },
+  { name: "AI Model", status: "partial", course: "challenges/rl (DQN/PPO) + challenges/llm (planned)", stages: "24 built · Transformer planned", harness: "stdin/stdout", desc: "RL models (DQN, PPO) covered in challenges/rl; dedicated GPT/Transformer from scratch planned." },
+  { name: "Augmented Reality", status: "planned", course: "challenges/ar-pose", stages: "8 planned", harness: "Graphics / Binary / Hardware", desc: "Fiducial marker detection, homography estimation, PnP camera pose, and 3D wireframe projection." },
+  { name: "BitTorrent Client", status: "planned", course: "challenges/bittorrent", stages: "10 planned", harness: "Network / HTTP / TCP", desc: "Bencode parser, torrent metadata, tracker HTTP handshake, peer wire protocol, piece assembly." },
+  { name: "Blockchain / Cryptocurrency", status: "planned", course: "challenges/blockchain", stages: "8 planned", harness: "stdin/stdout", desc: "Merkle trees, SHA-256 proof-of-work, UTXO transactions, signatures, and consensus validation." },
+  { name: "Bot", status: "planned", course: "challenges/bot", stages: "6 planned", harness: "Network / HTTP / TCP", desc: "Event-driven webhook/WebSocket bot protocol, command routing, rate limits, and state machines." },
+  { name: "Command-Line Tool", status: "covered", course: "challenges/wc", stages: "3 stages verified", harness: "stdin/stdout", desc: "Covered by challenges/wc (lines, words, bytes). Expandable with grep/jq/tar style CLI tools." },
+  { name: "Database", status: "planned", course: "challenges/database", stages: "12 planned", harness: "Filesystem / CLI", desc: "B-tree / LSM storage engine, WAL, page cache, SQL parser, planner, and ACID transactions." },
+  { name: "Distributed Systems", status: "planned", course: "challenges/raft", stages: "10 planned", harness: "Network / HTTP / TCP", desc: "Leader election, Raft log replication, snapshotting, and linearizable distributed KV store." },
+  { name: "Docker", status: "planned", course: "challenges/container", stages: "8 planned", harness: "Filesystem / CLI", desc: "Linux namespaces, chroot/pivot_root, cgroups limits, OCI image layers, and process isolation." },
+  { name: "Emulator / Virtual Machine", status: "planned", course: "challenges/chip8", stages: "8 planned", harness: "Graphics / Binary / Hardware", desc: "CHIP-8 / bytecode VM: instruction decode, registers, stack, timers, and deterministic trace verification." },
+  { name: "Front-end Framework / Library", status: "planned", course: "challenges/vdom", stages: "8 planned", harness: "Interactive / REPL / PTY", desc: "Virtual DOM, reconciliation diffing, signals/reactive state, hooks, and component lifecycle." },
+  { name: "Game", status: "planned", course: "challenges/game-loop", stages: "8 planned", harness: "Interactive / REPL / PTY", desc: "Fixed-timestep simulation loop, ECS architecture, collision detection, and deterministic replay." },
+  { name: "Git", status: "planned", course: "challenges/git", stages: "10 planned", harness: "Filesystem / CLI", desc: "Zlib blobs, SHA-1 content-addressed object store, trees, commits, index staging, and packfiles." },
+  { name: "Memory Allocator", status: "planned", course: "challenges/malloc", stages: "8 planned", harness: "stdin/stdout", desc: "Free lists, block splitting/coalescing, alignment, arena/slab allocators, and leak/fragmentation checks." },
+  { name: "Network Stack", status: "planned", course: "challenges/tcp-ip", stages: "10 planned", harness: "Network / HTTP / TCP", desc: "Ethernet frames, ARP, IPv4 checksums, ICMP, TCP 3-way handshake, sliding window, and congestion control." },
+  { name: "Neural Network", status: "covered", course: "challenges/rl (Stages 11–13)", stages: "MLP · Backprop · Adam", harness: "stdin/stdout", desc: "Covered in challenges/rl: MLP forward pass, manual backprop, MSE/Huber losses, SGD, Adam, gradient clipping." },
+  { name: "Operating System", status: "planned", course: "challenges/os-kernel", stages: "10 planned", harness: "Graphics / Binary / Hardware", desc: "Bootloader, paging/virtual memory, round-robin scheduler, syscalls, and QEMU headless test harness." },
+  { name: "Physics Engine", status: "partial", course: "challenges/rl (CartPole/Pendulum) + challenges/physics", stages: "Rigid-body 2D planned", harness: "stdin/stdout", desc: "CartPole & Pendulum Euler integrators in challenges/rl; full 2D rigid-body collision/impulse engine planned." },
+  { name: "Processor", status: "planned", course: "challenges/riscv-cpu", stages: "10 planned", harness: "Graphics / Binary / Hardware", desc: "Logic gates, ALU, register file, RV32I instruction decoder, single-cycle and pipelined datapath." },
+  { name: "Programming Language", status: "planned", course: "challenges/lisp", stages: "10 planned", harness: "Interactive / REPL / PTY", desc: "Lexer, recursive-descent parser, AST evaluator, lexical closures, tail calls, and bytecode VM." },
+  { name: "Regex Engine", status: "planned", course: "challenges/regex", stages: "8 planned", harness: "stdin/stdout", desc: "Regex AST, Thompson NFA construction, epsilon-closure simulation, quantifiers, groups, and backreferences." },
+  { name: "Search Engine", status: "planned", course: "challenges/search", stages: "8 planned", harness: "stdin/stdout", desc: "Tokenizer, inverted index, TF-IDF & BM25 ranking, boolean queries, and phrase proximity scoring." },
+  { name: "Shell", status: "planned", course: "challenges/shell", stages: "10 planned", harness: "Interactive / REPL / PTY", desc: "REPL, quoting/escaping, builtins, PATH resolution, pipelines, redirections, and job control." },
+  { name: "Template Engine", status: "planned", course: "challenges/template", stages: "6 planned", harness: "stdin/stdout", desc: "Template lexer/parser, variable interpolation, HTML escaping, loops/conditionals, and template inheritance." },
+  { name: "Text Editor", status: "planned", course: "challenges/editor", stages: "8 planned", harness: "Interactive / REPL / PTY", desc: "Piece table / rope buffer, cursor movement, undo/redo stack, search, and incremental syntax highlighting." },
+  { name: "Visual Recognition System", status: "planned", course: "challenges/vision", stages: "8 planned", harness: "Graphics / Binary / Hardware", desc: "2D convolution, edge detection, HOG features, CNN forward/backward pass, and image classification." },
+  { name: "Voxel Engine", status: "planned", course: "challenges/voxel", stages: "8 planned", harness: "Graphics / Binary / Hardware", desc: "3D chunk storage, greedy meshing, ray-marching / DDA traversal, and procedural heightmap generation." },
+  { name: "Web Browser", status: "planned", course: "challenges/browser", stages: "10 planned", harness: "Graphics / Binary / Hardware", desc: "HTML tokenizer & DOM tree, CSS selector cascade, box-model layout engine, and display-list painting." },
+  { name: "Web Server", status: "planned", course: "challenges/http-server", stages: "8 planned", harness: "Network / HTTP / TCP", desc: "TCP listener, HTTP/1.1 request parsing, routing, keep-alive, chunked transfer, and gzip compression." }
+];
+
+let issues = FALLBACK_ISSUES;
+let runs = [];
+let viewMode = "table";
+let activeIssue = null;
+
+function classifySeverity(issue) {
+  const b = (issue.body || "").toLowerCase();
+  if (b.includes("**critical**")) return "critical";
+  if (b.includes("**high**")) return "high";
+  if (b.includes("**medium**")) return "medium";
+  if (b.includes("**low**")) return "low";
+  return "medium";
+}
+
+function classifyTrack(issue) {
+  const text = `${issue.title} ${issue.body || ""}`.toLowerCase();
+  if (text.includes("ci workflow") || text.includes("ci.yml") || text.includes("pages")) return "CI/CD & Deploy";
+  if (text.includes("claude") || text.includes("last_commit_diff") || text.includes("current_hint") || text.includes("ollama") || text.includes("review")) return "Reasoning & AI";
+  if (text.includes("docs/index.html") || text.includes("src/web/index.html") || text.includes("accessibility") || text.includes("quirks mode")) return "Design & Web";
+  if (text.includes("challenges/") || text.includes("rl stage") || text.includes("pid") || text.includes("categorical")) return "Course Structure";
+  return "Core Runner";
+}
+
+function el(tag, attrs = {}, children = []) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "text") node.textContent = v;
+    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else if (v != null) node.setAttribute(k, v);
+  }
+  for (const child of children) {
+    if (child != null) node.append(typeof child === "string" ? document.createTextNode(child) : child);
+  }
+  return node;
+}
+
+function renderKPIs() {
+  const open = issues.filter(i => i.state === "open");
+  const closed = issues.filter(i => i.state === "closed");
+  document.getElementById("kpi-open").textContent = `${open.length} open`;
+  document.getElementById("kpi-closed").textContent = `${closed.length} closed`;
+  document.getElementById("cnt-issues").textContent = open.length;
+
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const i of open) counts[classifySeverity(i)]++;
+  const totalOpen = Math.max(open.length, 1);
+  const colors = { critical: "var(--crit)", high: "var(--setpoint)", medium: "var(--warn)", low: "var(--muted)" };
+  const bar = document.getElementById("kpi-sev-bar");
+  bar.replaceChildren(...Object.entries(counts).map(([k, v]) =>
+    el("div", { class: "bar-seg", style: `width:${(100 * v / totalOpen).toFixed(1)}%;background:${colors[k]}`, title: `${k}: ${v}` })
+  ));
+  document.getElementById("kpi-sev-meta").replaceChildren(
+    ...Object.entries(counts).map(([k, v]) => el("span", { text: `${k}: ${v}` }))
+  );
+
+  // BYOX KPI
+  const covered = BYOX_CATEGORIES.filter(c => c.status === "covered").length;
+  const partial = BYOX_CATEGORIES.filter(c => c.status === "partial").length;
+  const total = BYOX_CATEGORIES.length;
+  const pct = Math.round(((covered + partial * 0.5) / total) * 100);
+  document.getElementById("kpi-byox-pct").textContent = `${pct}%`;
+  document.getElementById("kpi-byox-count").textContent = `${covered} full · ${partial} partial / ${total}`;
+  document.getElementById("kpi-byox-bar").replaceChildren(
+    el("div", { class: "bar-seg", style: `width:${(100 * covered / total).toFixed(1)}%;background:var(--ok)` }),
+    el("div", { class: "bar-seg", style: `width:${(100 * partial / total).toFixed(1)}%;background:var(--warn)` })
+  );
+  document.getElementById("kpi-byox-meta").textContent = `+ bonus Control Systems (challenges/pid)`;
+}
+
+function filteredIssues() {
+  const q = document.getElementById("f-search").value.trim().toLowerCase();
+  const st = document.getElementById("f-state").value;
+  const sev = document.getElementById("f-sev").value;
+  const track = document.getElementById("f-track").value;
+  const sevOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+  return issues
+    .filter(i => st === "all" || i.state === st)
+    .filter(i => sev === "all" || classifySeverity(i) === sev)
+    .filter(i => track === "all" || classifyTrack(i) === track)
+    .filter(i => !q || (`#${i.number} ${i.title} ${i.body || ""}`).toLowerCase().includes(q))
+    .sort((a, b) => (sevOrder[classifySeverity(a)] - sevOrder[classifySeverity(b)]) || (a.number - b.number));
+}
+
+function renderIssues() {
+  const list = filteredIssues();
+  const container = document.getElementById("issues-container");
+  if (!list.length) {
+    container.replaceChildren(el("div", { class: "empty", text: "No issues match the current filters." }));
+    return;
+  }
+  if (viewMode === "table") {
+    const tbody = el("tbody", {}, list.map(issue => {
+      const sev = classifySeverity(issue);
+      const track = classifyTrack(issue);
+      const labelNodes = (issue.labels || []).map(l => el("span", { class: "tag", text: l.name }));
+      return el("tr", { onclick: () => openDrawer(issue) }, [
+        el("td", { class: "issue-num", text: `#${issue.number}` }),
+        el("td", {}, [el("span", { class: `badge state-${issue.state}`, text: issue.state })]),
+        el("td", {}, [el("span", { class: `badge sev-${sev}`, text: sev })]),
+        el("td", {}, [el("span", { class: "tag", text: track })]),
+        el("td", {}, [
+          el("div", { class: "issue-title", text: issue.title }),
+          el("div", { class: "issue-tags" }, labelNodes)
+        ])
+      ]);
+    }));
+    container.replaceChildren(el("div", { class: "table-wrap" }, [
+      el("table", {}, [
+        el("thead", {}, [el("tr", {}, [
+          el("th", { text: "#" }),
+          el("th", { text: "State" }),
+          el("th", { text: "Severity" }),
+          el("th", { text: "Track" }),
+          el("th", { text: "Issue" })
+        ])]),
+        tbody
+      ])
+    ]));
+  } else {
+    const tracks = ["Core Runner", "Reasoning & AI", "Design & Web", "Course Structure", "CI/CD & Deploy"];
+    const board = el("div", { class: "board" }, tracks.map(t => {
+      const items = list.filter(i => classifyTrack(i) === t);
+      return el("div", { class: "col" }, [
+        el("div", { class: "col-head" }, [
+          el("h3", { text: t }),
+          el("span", { class: "tag", text: String(items.length) })
+        ]),
+        ...(items.length ? items.map(issue => {
+          const sev = classifySeverity(issue);
+          return el("article", { class: "card", onclick: () => openDrawer(issue) }, [
+            el("div", { class: "card-top" }, [
+              el("span", { class: "issue-num", text: `#${issue.number}` }),
+              el("span", { class: `badge sev-${sev}`, text: sev })
+            ]),
+            el("div", { class: "card-title", text: issue.title }),
+            el("div", { class: "issue-tags" }, [
+              el("span", { class: `badge state-${issue.state}`, text: issue.state }),
+              ...(issue.labels || []).map(l => el("span", { class: "tag", text: l.name }))
+            ])
+          ]);
+        }) : [el("div", { class: "empty", text: "Empty", style: "padding:14px 4px" })])
+      ]);
+    }));
+    container.replaceChildren(board);
+  }
+}
+
+function renderByox() {
+  const q = document.getElementById("byox-search").value.trim().toLowerCase();
+  const st = document.getElementById("byox-status").value;
+  const h = document.getElementById("byox-harness").value;
+  const order = { covered: 0, partial: 1, planned: 2 };
+  const list = BYOX_CATEGORIES
+    .filter(c => st === "all" || c.status === st)
+    .filter(c => h === "all" || c.harness === h)
+    .filter(c => !q || `${c.name} ${c.course} ${c.desc} ${c.harness}`.toLowerCase().includes(q))
+    .sort((a, b) => (order[a.status] - order[b.status]) || a.name.localeCompare(b.name));
+
+  const grid = document.getElementById("byox-grid");
+  if (!list.length) {
+    grid.replaceChildren(el("div", { class: "empty", text: "No Build Your Own X categories match." }));
+    return;
+  }
+  grid.replaceChildren(...list.map(cat => {
+    const slug = cat.course.split(" ")[0].replace("challenges/", "");
+    const newCmd = `tutor new ${slug} "Build your own ${cat.name}: ${cat.desc}"`;
+    const ghNewUrl = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent(`Course: Build your own ${cat.name}`)}&labels=enhancement&body=${encodeURIComponent(`### Build Your Own X Category\n**${cat.name}**\n\n### Target Course Path\n\`${cat.course}\`\n\n### Harness Mode Required\n\`${cat.harness}\`\n\n### Scope\n${cat.desc}\n`)}`;
+    const copyBtn = el("button", { type: "button", class: "btn small", text: "Copy tutor new" });
+    copyBtn.addEventListener("click", () => copyText(newCmd, copyBtn, "Copy tutor new"));
+    return el("article", { class: `byox-card is-${cat.status}` }, [
+      el("div", { class: "byox-head" }, [
+        el("h3", { text: cat.name }),
+        el("span", { class: `badge status-${cat.status}`, text: cat.status })
+      ]),
+      el("div", { class: "byox-meta" }, [
+        el("span", { class: "tag", text: cat.harness }),
+        el("span", { class: "tag", text: cat.stages })
+      ]),
+      el("p", { class: "byox-desc", text: cat.desc }),
+      el("div", { class: "byox-meta" }, [el("code", { text: cat.course })]),
+      el("div", { class: "byox-actions" }, [
+        copyBtn,
+        cat.status === "planned"
+          ? el("a", { class: "btn small", href: ghNewUrl, target: "_blank", rel: "noopener", text: "+ Track Issue" })
+          : null
+      ])
+    ]);
+  }));
+}
+
+function renderRuns() {
+  const container = document.getElementById("runs-container");
+  document.getElementById("cnt-runs").textContent = runs.length;
+  if (!runs.length) {
+    document.getElementById("kpi-ci-status").textContent = "Ready";
+    document.getElementById("kpi-ci-detail").textContent = "Sync with GitHub Actions to load live workflow runs.";
+    container.replaceChildren(el("div", { class: "empty", text: "No live GitHub Actions runs loaded yet. Click 'Sync GitHub' or view Actions directly." }));
+    return;
+  }
+  const latest = runs[0];
+  const stateLabel = latest.conclusion || latest.status || "unknown";
+  const kpiEl = document.getElementById("kpi-ci-status");
+  kpiEl.textContent = stateLabel.toUpperCase();
+  kpiEl.style.color = stateLabel === "success" ? "var(--ok)" : stateLabel === "failure" ? "var(--crit)" : "var(--warn)";
+  document.getElementById("kpi-ci-meta").textContent = latest.name || "CI";
+  document.getElementById("kpi-ci-detail").textContent = `${(latest.head_sha || "").slice(0, 7)} · ${latest.display_title || latest.event}`;
+
+  container.replaceChildren(el("table", {}, [
+    el("thead", {}, [el("tr", {}, [
+      el("th", { text: "Workflow" }),
+      el("th", { text: "Status" }),
+      el("th", { text: "Commit" }),
+      el("th", { text: "Branch" }),
+      el("th", { text: "Updated" })
+    ])]),
+    el("tbody", {}, runs.map(r => {
+      const st = r.conclusion || r.status || "queued";
+      const cls = st === "success" ? "status-covered" : st === "failure" ? "sev-critical" : "status-partial";
+      return el("tr", { onclick: () => window.open(r.html_url, "_blank", "noopener") }, [
+        el("td", {}, [el("strong", { text: r.name }), el("div", { class: "label", text: r.event })]),
+        el("td", {}, [el("span", { class: `badge ${cls}`, text: st })]),
+        el("td", {}, [el("code", { text: (r.head_sha || "").slice(0, 7) }), " ", r.display_title || ""]),
+        el("td", {}, [el("span", { class: "tag", text: r.head_branch || "main" })]),
+        el("td", { style: "font-family:var(--mono);font-size:12px;color:var(--muted)", text: new Date(r.updated_at).toLocaleString() })
+      ]);
+    }))
+  ]));
+}
+
+function openDrawer(issue) {
+  activeIssue = issue;
+  const sev = classifySeverity(issue);
+  const track = classifyTrack(issue);
+  document.getElementById("drawer-title").textContent = `#${issue.number} · ${issue.title}`;
+  document.getElementById("drawer-badges").replaceChildren(
+    el("span", { class: `badge state-${issue.state}`, text: issue.state }),
+    el("span", { class: `badge sev-${sev}`, text: sev }),
+    el("span", { class: "tag", text: track }),
+    ...(issue.labels || []).map(l => el("span", { class: "tag", text: l.name }))
+  );
+  document.getElementById("drawer-gh").href = issue.html_url;
+  document.getElementById("drawer-body").textContent = issue.body || "(No description)";
+  document.getElementById("drawer-backdrop").hidden = false;
+}
+
+function closeDrawer() {
+  document.getElementById("drawer-backdrop").hidden = true;
+}
+
+async function copyText(text, btn, original) {
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied ✓";
+  } catch {
+    btn.textContent = "Copy failed";
+  }
+  clearTimeout(btn._t);
+  btn._t = setTimeout(() => { btn.textContent = original; }, 1600);
+}
+
+async function syncGitHub() {
+  const pill = document.getElementById("sync-status");
+  pill.textContent = "Syncing GitHub…";
+  pill.classList.remove("live");
+  try {
+    const [issRes, runRes] = await Promise.all([
+      fetch(`https://api.github.com/repos/${REPO}/issues?state=all&per_page=100`, { headers: { Accept: "application/vnd.github+json" } }),
+      fetch(`https://api.github.com/repos/${REPO}/actions/runs?per_page=12`, { headers: { Accept: "application/vnd.github+json" } })
+    ]);
+    if (!issRes.ok) throw new Error(`Issues API ${issRes.status}`);
+    const rawIssues = await issRes.json();
+    issues = rawIssues.filter(i => !i.pull_request);
+    if (runRes.ok) {
+      const runData = await runRes.json();
+      runs = runData.workflow_runs || [];
+    }
+    pill.textContent = `Live · ${new Date().toLocaleTimeString()}`;
+    pill.classList.add("live");
+  } catch (err) {
+    pill.textContent = `Offline snapshot (${err.message})`;
+  }
+  renderKPIs();
+  renderIssues();
+  renderByox();
+  renderRuns();
+}
+
+// Tabs
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    for (const t of document.querySelectorAll(".tab")) {
+      const sel = t === tab;
+      t.setAttribute("aria-selected", String(sel));
+      document.getElementById(t.getAttribute("aria-controls")).hidden = !sel;
+    }
+  });
+}
+
+// Issue filters
+for (const id of ["f-search", "f-state", "f-sev", "f-track"]) {
+  document.getElementById(id).addEventListener("input", renderIssues);
+  document.getElementById(id).addEventListener("change", renderIssues);
+}
+for (const id of ["byox-search", "byox-status", "byox-harness"]) {
+  document.getElementById(id).addEventListener("input", renderByox);
+  document.getElementById(id).addEventListener("change", renderByox);
+}
+
+document.getElementById("view-table").addEventListener("click", () => {
+  viewMode = "table";
+  document.getElementById("view-table").setAttribute("aria-pressed", "true");
+  document.getElementById("view-board").setAttribute("aria-pressed", "false");
+  renderIssues();
+});
+document.getElementById("view-board").addEventListener("click", () => {
+  viewMode = "board";
+  document.getElementById("view-table").setAttribute("aria-pressed", "false");
+  document.getElementById("view-board").setAttribute("aria-pressed", "true");
+  renderIssues();
+});
+
+document.getElementById("drawer-close").addEventListener("click", closeDrawer);
+document.getElementById("drawer-backdrop").addEventListener("click", e => {
+  if (e.target.id === "drawer-backdrop") closeDrawer();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeDrawer();
+});
+
+document.getElementById("drawer-copy-prompt").addEventListener("click", e => {
+  if (!activeIssue) return;
+  const prompt = `Read AGENTS.md first, then solve GitHub issue #${activeIssue.number} (${activeIssue.html_url}): "${activeIssue.title}".\n\n${activeIssue.body}\n\nVerify with cargo fmt --check, cargo clippy --all-targets --locked -- -D warnings, and TUTOR_LLM=off cargo test --locked.`;
+  copyText(prompt, e.currentTarget, "Copy Agent Prompt");
+});
+
+document.getElementById("btn-sync").addEventListener("click", syncGitHub);
+document.getElementById("btn-theme").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.getAttribute("data-theme") === "dark" || (!root.getAttribute("data-theme") && matchMedia("(prefers-color-scheme: dark)").matches);
+  root.setAttribute("data-theme", dark ? "light" : "dark");
+});
+
+renderKPIs();
+renderIssues();
+renderByox();
+renderRuns();
+syncGitHub();
+</script>
+</body>
+</html>

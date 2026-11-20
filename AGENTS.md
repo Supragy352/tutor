@@ -8,24 +8,21 @@
 
 Any agent picking up an issue, designing a feature, or authoring a course in this repository should align with the owner's explicit direction:
 
-1. **Primary Focus — Deep Engineering & ML Courses:**
-   - The core value of `tutor` lives in rigorous, from-scratch engineering and machine learning curricula (such as [`challenges/pid`](challenges/pid) and [`challenges/rl`](challenges/rl)) and expanding the catalog with new deep technical courses.
+1. **Prime Goal — Complete `build-your-own-x` Coverage & Deep Technical Courses:**
+   - A north-star goal for `tutor` is covering **every single category** in [`codecrafters-io/build-your-own-x`](https://github.com/codecrafters-io/build-your-own-x) (all 30 categories: 3D Renderer, AI Model, Augmented Reality, BitTorrent Client, Blockchain, Bot, CLI Tool, Database, Distributed Systems, Docker, Emulator/VM, Front-end Framework, Game, Git, Memory Allocator, Network Stack, Neural Network, Operating System, Physics Engine, Processor, Programming Language, Regex Engine, Search Engine, Shell, Template Engine, Text Editor, Visual Recognition, Voxel Engine, Web Browser, Web Server), alongside rigorous engineering tracks like [`challenges/pid`](challenges/pid) and [`challenges/rl`](challenges/rl).
+   - Coverage progress is tracked in [`docs/dashboard.html`](docs/dashboard.html) (Mission Control).
    - Course stages must teach the underlying math, physics, or systems concepts clearly without giving away solution code, while reference solutions under `challenges/<slug>/reference/` must be deterministic, self-contained, and verified against every test.
 
-2. **Architecture & Dependencies — Prioritize Robustness and Features Freely:**
-   - Do **not** feel constrained to keep the Rust codebase in a single file (`src/main.rs`) or at near-zero dependencies when implementing fixes or new capabilities.
-   - Splitting [`src/`](src) into clean, focused modules (e.g., `cli`, `runner`, `llm`, `server`, `challenge`, `progress`) and adding well-maintained crates (e.g., `clap`, `tiny_http` / `axum`, `shlex`, `tempfile`) is encouraged whenever it improves reliability, cross-platform correctness, or developer velocity.
+2. **Four Active Strategic Workstreams:**
+   - **Design:** Keep the learner cockpit ([`src/web/index.html`](src/web/index.html)), landing page ([`docs/index.html`](docs/index.html)), and Mission Control issue tracker ([`docs/dashboard.html`](docs/dashboard.html)) cohesive, fast, accessible, and clear.
+   - **Reasoning Handling:** Support configurable AI backends (OpenAI-compatible `/v1/chat/completions` endpoints, Ollama, and custom CLI agent commands) and deliberate reasoning/thinking configuration (moving away from hardcoded `"think": false`, feeding accurate uncommitted diffs + exit status + persisted hint history).
+   - **Course Structure:** Evolve `challenge.toml` and course layouts beyond single-file `stdin`/`stdout` specs to support modular stage definitions, richer fixtures, and multi-mode verification harnesses.
+   - **Architecture & Dependencies:** Do **not** feel constrained to keep the Rust codebase in a single file (`src/main.rs`) or at near-zero dependencies. Splitting [`src/`](src) into focused modules (`cli`, `runner`, `llm`, `server`, `challenge`, `progress`) and adding well-maintained crates (`clap`, `tiny_http`/`axum`, `shlex`, `tempfile`, etc.) is encouraged whenever it improves reliability or velocity.
 
 3. **Test Harness Evolution — Beyond `stdin`/`stdout`:**
-   - While black-box `args` + `stdin` -> `stdout` remains the baseline protocol, the test runner is evolving to support richer verification modes, including:
+   - While black-box `args` + `stdin` -> `stdout` remains the baseline protocol, the test runner is evolving to support richer verification modes required by `build-your-own-x`:
      - Process timeouts, exit-code assertions, and safe concurrent pipe handling.
-     - Language-specific test harnesses and interactive protocols (e.g., TCP sockets, HTTP servers, multi-turn REPLs, or file artifacts) for courses that cannot be expressed as one-shot `stdin`/`stdout` filters.
-
-4. **Configurable AI Backends:**
-   - `tutor` uses two tiers of AI assistance:
-     1. **Fast advisory diff reviewer** after each test run (currently Ollama via `TUTOR_LLM` / `TUTOR_MODEL`).
-     2. **Agentic tutor & course designer** for `tutor hint`, automatic escalation after repeated failures, and `tutor new` (currently `claude -p`).
-   - Avoid hardcoding assumptions that lock the codebase to a single vendor. Support configurable backends: OpenAI-compatible HTTP endpoints (`/v1/chat/completions` in addition to Ollama `/api/generate`) for reviews, and configurable agent CLI commands / providers for hints and course generation.
+     - Language-specific test harnesses, filesystem/CLI workspace checks, interactive REPL/PTY protocols, TCP/HTTP network testing, and binary/image/headless emulator harnesses.
 
 ---
 
@@ -33,13 +30,15 @@ Any agent picking up an issue, designing a feature, or authoring a course in thi
 
 ```text
 tutor/
+├── AGENTS.md                   # Project focus, strategic tracks, and agent guidelines
 ├── Cargo.toml                  # Rust crate manifest
 ├── src/
 │   ├── main.rs                 # Core CLI, test runner, LLM integration, and HTTP server
 │   └── web/
 │       └── index.html          # Local web dashboard served by `tutor serve`
 ├── docs/
-│   └── index.html              # Public landing page with interactive PID step-response plot
+│   ├── index.html              # Public landing page with interactive PID step-response plot
+│   └── dashboard.html          # Mission Control: live GitHub Issues, CI/CD, and Build-Your-Own-X tracker
 ├── challenges/
 │   ├── wc/                     # 3-stage course: build `wc` (lines, words, bytes)
 │   │   ├── challenge.toml
@@ -50,7 +49,9 @@ tutor/
 │   └── rl/                     # 24-stage course: RL from scratch (CartPole, Pendulum, Q-learning, MLP, DQN, PPO, HPO)
 │       ├── challenge.toml
 │       └── reference/main.py
-└── .github/workflows/ci.yml    # GitHub Actions CI (Ubuntu + Windows, Python 3.12 + numpy, Rust stable)
+└── .github/workflows/
+    ├── ci.yml                  # CI: rustfmt, clippy, build, 35-stage verification (Ubuntu + Windows), docs check
+    └── pages.yml               # CD: deploys docs/ (Overview + Mission Control dashboard) to GitHub Pages
 ```
 
 ---
