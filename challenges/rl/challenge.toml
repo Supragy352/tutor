@@ -190,7 +190,7 @@ At timestep `t` out of `TOTAL`:
 `epsilon(t) = START + (END - START) * min(1, t / (FRACTION * TOTAL))`.
 
 Command: `rl.py schedule START END FRACTION TOTAL`. Each stdin line holds a timestep. Print epsilon
-at every timestep, on one line.
+for every timestep on a single space-separated line across all inputs.
 '''
 tests = [
   { args = ["schedule", "1.0", "0.05", "0.1", "10000"], stdin = "0\n500\n1000\n5000\n", expect = "1.0000 0.5250 0.0500 0.0500" },
@@ -211,7 +211,8 @@ epsilon-greedy choice draws exactly as follows:
 Drawing in exactly this order is what keeps your agent's run reproducible.
 
 Command: `rl.py egreedy EPSILON SEED`. Each stdin line is a list of action values. Use one generator
-for all the lines, and print the chosen action for every line, on one line.
+for all the lines, and print the chosen action for every line on a single space-separated line
+across all inputs.
 '''
 tests = [
   { args = ["egreedy", "0", "1"], stdin = "1 2 3\n3 3 1\n-1 -5\n", expect = "2 0 0" },
@@ -233,7 +234,7 @@ bins. Combine the four bins into one index in mixed radix, with the first dimens
 `((b0 * n1 + b1) * n2 + b2) * n3 + b3`.
 
 Command: `rl.py discretize N0 N1 N2 N3`. Each stdin line is an observation. Print each observation's
-state index, on one line.
+state index on a single space-separated line across all inputs.
 
 Using one bin for a dimension ignores it. `1 1 6 12` (pole angle and spin only) is enough to solve
 CartPole, as you'll see in stage 10.
@@ -264,7 +265,8 @@ target is just the reward.
 
 Command: `rl.py qupdate ALPHA GAMMA NUM_STATES NUM_ACTIONS`. Start with a table of zeros. Each stdin
 line is a transition `s a r s' terminated`, with `terminated` as 0 or 1. Apply the updates in order.
-Print every transition's TD error on one line, then the final table, one state per line.
+Print every transition's TD error on a single space-separated line across all inputs, then the final
+table, one state per line.
 '''
 tests = [
   { args = ["qupdate", "0.5", "0.9", "3", "2"], stdin = "0 1 1 1 0\n1 0 2 2 1\n0 1 1 1 0\n1 1 -1 0 0\n0 0 0 2 0\n", expect = "1.0000 2.0000 1.4000 0.0800 0.0000\n0.0000 1.2000\n1.0000 0.0400\n0.0000 0.0000" },
