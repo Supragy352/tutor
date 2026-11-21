@@ -238,8 +238,89 @@ fn verify(dir: &Path) -> Result<(String, bool), String> {
     Ok(run_stages(run, dir, &c.stages))
 }
 
+fn strip_verbatim_prefix(path: PathBuf) -> PathBuf {
+    let Some(s) = path.to_str() else {
+        return path;
+    };
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        let bytes = rest.as_bytes();
+        if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+            return PathBuf::from(rest);
+        }
+    }
+    path
+}
+
+fn shell_single_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+fn format_hook_script(exe: &Path) -> String {
+    // git runs hooks with sh, even on Windows, so use forward slashes and single-quote the path.
+    let clean = strip_verbatim_prefix(exe.to_path_buf());
+    let posix = clean.display().to_string().replace('\\', "/");
+    format!("#!/bin/sh\n{} test\n", shell_single_quote(&posix))
+}
+
+fn resolve_hooks_dir(repo_dir: &Path) -> Option<PathBuf> {
+    let dot_git = repo_dir.join(".git");
+    if !dot_git.exists() {
+        return None;
+    }
+
+    if let Ok(out) = Command::new("git")
+        .args(["rev-parse", "--git-path", "hooks"])
+        .current_dir(repo_dir)
+        .output()
+    {
+        if out.status.success() {
+            let raw = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !raw.is_empty() {
+                let p = PathBuf::from(raw);
+                let resolved = if p.is_absolute() { p } else { repo_dir.join(p) };
+                return Some(strip_verbatim_prefix(resolved));
+            }
+        }
+    }
+
+    if dot_git.is_dir() {
+        return Some(dot_git.join("hooks"));
+    }
+
+    // Fallback for .git files (worktrees/submodules) if git rev-parse is unavailable.
+    let contents = fs::read_to_string(&dot_git).ok()?;
+    let gitdir_raw = contents
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("gitdir:"))?
+        .trim();
+    if gitdir_raw.is_empty() {
+        return None;
+    }
+    let gitdir_path = PathBuf::from(gitdir_raw);
+    let gitdir = if gitdir_path.is_absolute() {
+        gitdir_path
+    } else {
+        repo_dir.join(gitdir_path)
+    };
+    let commondir_file = gitdir.join("commondir");
+    if let Ok(common_raw) = fs::read_to_string(&commondir_file) {
+        let common = common_raw.trim();
+        if !common.is_empty() {
+            let common_path = PathBuf::from(common);
+            let base = if common_path.is_absolute() {
+                common_path
+            } else {
+                gitdir.join(common_path)
+            };
+            return Some(base.join("hooks"));
+        }
+    }
+    Some(gitdir.join("hooks"))
+}
+
 fn init(dir: &str, build: Option<String>, run: &str) -> Result<(), String> {
-    let challenge = fs::canonicalize(dir).map_err(|e| format!("{dir}: {e}"))?;
+    let challenge =
+        strip_verbatim_prefix(fs::canonicalize(dir).map_err(|e| format!("{dir}: {e}"))?);
     let c = read_challenge(&challenge)?;
     save(&Progress {
         challenge,
@@ -259,11 +340,16 @@ fn init(dir: &str, build: Option<String>, run: &str) -> Result<(), String> {
 }
 
 fn install_hook() -> Result<(), String> {
-    let hook = Path::new(".git/hooks/post-commit");
-    if !Path::new(".git").is_dir() {
+    let exe = env::current_exe().map_err(|e| e.to_string())?;
+    install_hook_in(Path::new("."), &exe)
+}
+
+fn install_hook_in(repo_dir: &Path, exe: &Path) -> Result<(), String> {
+    let Some(hooks_dir) = resolve_hooks_dir(repo_dir) else {
         println!("Not a git repo, so there is no commit hook. Run `git init` and `tutor init` again to test on every commit.");
         return Ok(());
-    }
+    };
+    let hook = hooks_dir.join("post-commit");
     if hook.exists() {
         println!(
             "{} already exists; add `tutor test` to it yourself.",
@@ -271,17 +357,12 @@ fn install_hook() -> Result<(), String> {
         );
         return Ok(());
     }
-    // git runs hooks with sh, even on Windows, so use forward slashes.
-    let exe = env::current_exe()
-        .map_err(|e| e.to_string())?
-        .display()
-        .to_string()
-        .replace('\\', "/");
-    fs::write(hook, format!("#!/bin/sh\n\"{exe}\" test\n")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&hooks_dir).map_err(|e| e.to_string())?;
+    fs::write(&hook, format_hook_script(exe)).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(hook, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
     }
     println!("Installed git post-commit hook: tests run on every commit.");
     Ok(())
@@ -564,34 +645,78 @@ fn matches(got: &str, expect: &str) -> bool {
     normalize(got) == normalize(expect)
 }
 
+const MAX_DIFF_CHARS: usize = 12_000;
+
+fn truncate_diff(diff: &str, max_chars: usize) -> String {
+    let mut chars = diff.chars();
+    let prefix: String = chars.by_ref().take(max_chars).collect();
+    if chars.next().is_some() {
+        format!("{prefix}\n... (diff truncated)")
+    } else {
+        prefix
+    }
+}
+
 fn last_commit_diff() -> String {
+    last_commit_diff_in(Path::new("."))
+}
+
+fn last_commit_diff_in(cwd: &Path) -> String {
+    let working = Command::new("git")
+        .args(["diff", "HEAD", "--", ".", ":(exclude)tutor.toml"])
+        .current_dir(cwd)
+        .output();
+    if let Ok(o) = working {
+        if o.status.success() {
+            let diff = String::from_utf8_lossy(&o.stdout);
+            if !diff.trim().is_empty() {
+                return truncate_diff(&diff, MAX_DIFF_CHARS);
+            }
+        }
+    }
+
     let out = Command::new("git")
-        .args(["show", "HEAD", "--format="])
+        .args([
+            "show",
+            "HEAD",
+            "--format=",
+            "--",
+            ".",
+            ":(exclude)tutor.toml",
+        ])
+        .current_dir(cwd)
         .output();
     match out {
-        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
-            .chars()
-            .take(12_000)
-            .collect(),
+        Ok(o) if o.status.success() => {
+            let diff = String::from_utf8_lossy(&o.stdout);
+            truncate_diff(&diff, MAX_DIFF_CHARS)
+        }
         _ => "(no git commit to show)".into(),
+    }
+}
+
+fn normalize_llm_url(raw: &str) -> Option<String> {
+    let url = raw.trim().trim_end_matches('/');
+    if url.is_empty() || url.eq_ignore_ascii_case("off") {
+        None
+    } else {
+        Some(url.to_string())
     }
 }
 
 /// Local small-model review via Ollama. Advisory only: tests alone decide pass/fail.
 fn review(stage: &Stage, report: &str) -> Option<String> {
-    let url = env::var("TUTOR_LLM").unwrap_or("http://localhost:11434".into());
-    if url == "off" {
-        return None;
-    }
+    let raw_url = env::var("TUTOR_LLM").unwrap_or("http://localhost:11434".into());
+    let url = normalize_llm_url(&raw_url)?;
     let model = env::var("TUTOR_MODEL").unwrap_or("qwen3.6:35b".into());
     let diff = last_commit_diff();
     verbose!(
-        "review: asking {model} at {url} (last commit diff: {} chars)",
+        "review: asking {model} at {url} (diff: {} chars)",
         diff.len()
     );
     let started = Instant::now();
     let prompt = format!(
-        "You review code for a learner doing one stage of a coding course.\n\nStage: {}\n{}\n\nTest results:\n{report}\n\nTheir latest commit:\n{}\n\nIn at most 3 short bullet points, point out bugs or design problems relevant to this stage. If tests fail, nudge toward the cause without writing the fix. Never write solution code.",
+        "You review code for a learner doing one stage of a coding course.\n\nStage: {}\n{}\n\nTest results:\n{report}\n\nTheir latest changes:\n{}\n\nIn at most 3 short bullet points, point out bugs or design problems relevant to this stage. If tests fail, nudge toward the cause without writing the fix. Never write solution code.",
         stage.name,
         stage.instructions.trim(),
         diff
@@ -636,37 +761,53 @@ fn escalate(stage: &Stage, report: &str, review: Option<&str>) -> Result<String,
 
 /// Runs Claude Code headless with the prompt on stdin (avoids Windows command-line length limits).
 fn claude(prompt: &str, cwd: &Path, args: &[&str]) -> Result<String, String> {
+    let mut full_args = Vec::with_capacity(args.len() + 1);
+    full_args.push("-p");
+    full_args.extend_from_slice(args);
+    run_claude_cmd("claude", &full_args, prompt, cwd)
+}
+
+fn format_claude_error(status: std::process::ExitStatus, stdout: &str, stderr: &str) -> String {
+    let stderr = stderr.trim();
+    let stdout = stdout.trim();
+    match (stderr.is_empty(), stdout.is_empty()) {
+        (false, false) => {
+            format!("Claude Code failed ({status}):\nstderr: {stderr}\nstdout: {stdout}")
+        }
+        (false, true) => format!("Claude Code failed ({status}): {stderr}"),
+        (true, false) => format!("Claude Code failed ({status}): {stdout}"),
+        (true, true) => format!("Claude Code failed ({status})"),
+    }
+}
+
+fn run_claude_cmd(
+    program: &str,
+    args: &[&str],
+    prompt: &str,
+    cwd: &Path,
+) -> Result<String, String> {
     verbose!(
-        "claude: $ claude -p {} (in {}, prompt {} chars)",
+        "claude: $ {program} {} (in {}, prompt {} chars)",
         args.join(" "),
         cwd.display(),
         prompt.len()
     );
     let started = Instant::now();
-    let mut full_args = Vec::with_capacity(args.len() + 1);
-    full_args.push("-p");
-    full_args.extend_from_slice(args);
-    let out = process::run_command(
-        "claude",
-        &full_args,
-        cwd,
-        Some(prompt.as_bytes()),
-        false,
-        None,
-    )
-    .map_err(|e| match e {
-        ExecError::Spawn(err) => format!("could not start Claude Code (`claude`): {err}"),
-        ExecError::TimedOut(d) => {
-            format!("Claude Code timed out after {}", process::format_timeout(d))
-        }
-        ExecError::Io(err) => err.to_string(),
-    })?;
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let out = process::run_command(program, args, cwd, Some(prompt.as_bytes()), true, None)
+        .map_err(|e| match e {
+            ExecError::Spawn(err) => format!("could not start Claude Code (`{program}`): {err}"),
+            ExecError::TimedOut(d) => {
+                format!("Claude Code timed out after {}", process::format_timeout(d))
+            }
+            ExecError::Io(err) => err.to_string(),
+        })?;
+    let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     verbose!("claude: {} after {:.1?}", out.status, started.elapsed());
     if !out.status.success() {
-        return Err(format!("Claude Code failed: {text}"));
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        return Err(format_claude_error(out.status, &stdout, &stderr));
     }
-    Ok(text)
+    Ok(stdout)
 }
 
 // shortcut: single-threaded, so a slow Claude hint blocks other requests; fine for one local learner.
@@ -1303,6 +1444,266 @@ mod tests {
         assert_eq!(
             saved2.last.unwrap().hint.as_deref(),
             Some("actionable hint")
+        );
+    }
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(prefix: &str) -> Self {
+            let dir = env::temp_dir().join(format!(
+                "tutor_{prefix}_{}_{}",
+                std::process::id(),
+                TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&dir).unwrap();
+            Self(dir)
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn run_git(dir: &Path, args: &[&str]) {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("git should be installed");
+        assert!(
+            out.status.success(),
+            "git {} failed:\nstdout: {}\nstderr: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    #[test]
+    fn strip_verbatim_prefix_handles_drive_and_non_drive_paths() {
+        assert_eq!(
+            strip_verbatim_prefix(PathBuf::from(r"\\?\C:\Users\dev\tutor.exe")),
+            PathBuf::from(r"C:\Users\dev\tutor.exe")
+        );
+        assert_eq!(
+            strip_verbatim_prefix(PathBuf::from(r"\\?\d:\work\challenge")),
+            PathBuf::from(r"d:\work\challenge")
+        );
+        // Non-drive UNC verbatim paths and regular paths are preserved.
+        assert_eq!(
+            strip_verbatim_prefix(PathBuf::from(r"\\?\UNC\server\share\file")),
+            PathBuf::from(r"\\?\UNC\server\share\file")
+        );
+        assert_eq!(
+            strip_verbatim_prefix(PathBuf::from("/usr/local/bin/tutor")),
+            PathBuf::from("/usr/local/bin/tutor")
+        );
+    }
+
+    #[test]
+    fn format_hook_script_strips_verbatim_and_single_quotes() {
+        let script = format_hook_script(Path::new(r"\\?\C:\Program Files\My's\tutor.exe"));
+        assert_eq!(
+            script,
+            "#!/bin/sh\n'C:/Program Files/My'\\''s/tutor.exe' test\n"
+        );
+    }
+
+    #[test]
+    fn install_hook_creates_missing_hooks_dir_and_preserves_existing() {
+        let tmp = TempDir::new("hook_basic");
+        // Non-git directory is a no-op.
+        install_hook_in(&tmp.0, Path::new("/bin/tutor")).unwrap();
+        assert!(!tmp.0.join(".git").exists());
+
+        // Real git repo with .git/hooks deleted.
+        run_git(&tmp.0, &["init", "-q"]);
+        let hooks_dir = tmp.0.join(".git").join("hooks");
+        if hooks_dir.exists() {
+            fs::remove_dir_all(&hooks_dir).unwrap();
+        }
+        assert!(!hooks_dir.exists());
+
+        install_hook_in(&tmp.0, Path::new(r"\\?\C:\Tools\tutor.exe")).unwrap();
+        let hook = hooks_dir.join("post-commit");
+        assert!(hook.exists(), "post-commit hook should be created");
+        assert_eq!(
+            fs::read_to_string(&hook).unwrap(),
+            "#!/bin/sh\n'C:/Tools/tutor.exe' test\n"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(&hook).unwrap().permissions().mode();
+            assert_eq!(mode & 0o111, 0o111, "hook should be executable on Unix");
+        }
+
+        // Existing hook is not overwritten.
+        fs::write(&hook, "#!/bin/sh\necho custom\n").unwrap();
+        install_hook_in(&tmp.0, Path::new("/other/tutor")).unwrap();
+        assert_eq!(
+            fs::read_to_string(&hook).unwrap(),
+            "#!/bin/sh\necho custom\n"
+        );
+    }
+
+    #[test]
+    fn install_hook_supports_git_worktree_file() {
+        let tmp = TempDir::new("hook_worktree");
+        let common_git = tmp.0.join("main.git");
+        let worktree_gitdir = common_git.join("worktrees").join("wt1");
+        let worktree = tmp.0.join("wt1");
+        fs::create_dir_all(&worktree_gitdir).unwrap();
+        fs::create_dir_all(&worktree).unwrap();
+        fs::write(worktree_gitdir.join("commondir"), "../..\n").unwrap();
+        fs::write(
+            worktree.join(".git"),
+            format!("gitdir: {}\n", worktree_gitdir.display()),
+        )
+        .unwrap();
+
+        install_hook_in(&worktree, Path::new("/usr/bin/tutor")).unwrap();
+        let hook = common_git.join("hooks").join("post-commit");
+        assert!(
+            hook.exists(),
+            "worktree hook should be written in common hooks dir"
+        );
+        assert_eq!(
+            fs::read_to_string(&hook).unwrap(),
+            "#!/bin/sh\n'/usr/bin/tutor' test\n"
+        );
+    }
+
+    #[test]
+    fn run_claude_cmd_captures_stderr_stdout_and_handles_broken_pipe() {
+        // Success returns stdout.
+        let ok = run_claude_cmd(
+            "python",
+            &["-c", "import sys; print('hi:', sys.stdin.read().strip())"],
+            "world",
+            Path::new("."),
+        )
+        .unwrap();
+        assert_eq!(ok.trim(), "hi: world");
+
+        // Failure with stderr only includes stderr details.
+        let err_stderr = run_claude_cmd(
+            "python",
+            &[
+                "-c",
+                "import sys; sys.stderr.write('auth failed\\n'); sys.exit(1)",
+            ],
+            "prompt",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert!(
+            err_stderr.contains("auth failed"),
+            "expected stderr in error, got: {err_stderr}"
+        );
+
+        // Failure with both stdout and stderr includes both.
+        let err_both = run_claude_cmd(
+            "python",
+            &[
+                "-c",
+                "import sys; print('out msg'); sys.stderr.write('err msg\\n'); sys.exit(2)",
+            ],
+            "prompt",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert!(err_both.contains("err msg"), "missing stderr: {err_both}");
+        assert!(err_both.contains("out msg"), "missing stdout: {err_both}");
+
+        // Early exit before reading a large stdin payload (BrokenPipe) still captures stderr.
+        let huge_prompt = "x".repeat(256 * 1024);
+        let err_pipe = run_claude_cmd(
+            "python",
+            &[
+                "-c",
+                "import sys; sys.stderr.write('rate limited\\n'); sys.exit(1)",
+            ],
+            &huge_prompt,
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert!(
+            err_pipe.contains("rate limited"),
+            "BrokenPipe should not hide stderr, got: {err_pipe}"
+        );
+    }
+
+    #[test]
+    fn normalize_llm_url_trims_slashes_and_case_insensitive_off() {
+        assert_eq!(normalize_llm_url("off"), None);
+        assert_eq!(normalize_llm_url("OFF"), None);
+        assert_eq!(normalize_llm_url("  Off  "), None);
+        assert_eq!(normalize_llm_url(""), None);
+        assert_eq!(normalize_llm_url("   "), None);
+        assert_eq!(
+            normalize_llm_url("http://localhost:11434/"),
+            Some("http://localhost:11434".into())
+        );
+        assert_eq!(
+            normalize_llm_url("  http://127.0.0.1:11434/// "),
+            Some("http://127.0.0.1:11434".into())
+        );
+    }
+
+    #[test]
+    fn truncate_diff_appends_notice_only_when_exceeding_limit() {
+        assert_eq!(truncate_diff("abcdef", 6), "abcdef");
+        assert_eq!(truncate_diff("abcdef", 10), "abcdef");
+        assert_eq!(truncate_diff("abcdefg", 6), "abcdef\n... (diff truncated)");
+    }
+
+    #[test]
+    fn last_commit_diff_prefers_working_tree_and_excludes_tutor_toml() {
+        let tmp = TempDir::new("diff_review");
+        run_git(&tmp.0, &["init", "-q"]);
+        run_git(&tmp.0, &["config", "user.email", "test@example.com"]);
+        run_git(&tmp.0, &["config", "user.name", "Test"]);
+
+        // No commits yet -> fallback message.
+        assert_eq!(last_commit_diff_in(&tmp.0), "(no git commit to show)");
+
+        fs::write(tmp.0.join("solution.py"), "print('v1')\n").unwrap();
+        fs::write(tmp.0.join("tutor.toml"), "stage = 0\n").unwrap();
+        run_git(&tmp.0, &["add", "solution.py", "tutor.toml"]);
+        run_git(&tmp.0, &["commit", "-q", "-m", "initial"]);
+
+        // Clean working tree -> falls back to HEAD commit diff, excluding tutor.toml.
+        let head_diff = last_commit_diff_in(&tmp.0);
+        assert!(head_diff.contains("print('v1')"), "got: {head_diff}");
+        assert!(
+            !head_diff.contains("tutor.toml"),
+            "tutor.toml should be excluded: {head_diff}"
+        );
+
+        // Uncommitted changes to both solution.py and tutor.toml -> prefers working-tree diff, excludes tutor.toml.
+        fs::write(tmp.0.join("solution.py"), "print('v2')\n").unwrap();
+        fs::write(tmp.0.join("tutor.toml"), "stage = 1\n").unwrap();
+        let wt_diff = last_commit_diff_in(&tmp.0);
+        assert!(wt_diff.contains("print('v2')"), "got: {wt_diff}");
+        assert!(
+            !wt_diff.contains("tutor.toml"),
+            "tutor.toml should be excluded from working-tree diff: {wt_diff}"
+        );
+
+        // Only tutor.toml modified in working tree -> falls back to HEAD without tutor.toml.
+        fs::write(tmp.0.join("solution.py"), "print('v1')\n").unwrap();
+        let fallback_diff = last_commit_diff_in(&tmp.0);
+        assert!(
+            fallback_diff.contains("print('v1')"),
+            "got: {fallback_diff}"
+        );
+        assert!(
+            !fallback_diff.contains("stage = 1"),
+            "tutor.toml changes should not leak: {fallback_diff}"
         );
     }
 }
