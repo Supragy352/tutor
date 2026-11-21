@@ -291,8 +291,9 @@ training budget runs out first. Settings that work:
 - Act epsilon-greedily (stage 7). After each step, apply the stage 9 update with `terminated` as the
   done flag. Cut episodes off at 500 steps as usual.
 - Every 50 training episodes, run 10 **greedy** episodes (epsilon = 0, no learning) to evaluate.
-  Give evaluation its own generator seeded with `SEED + 1`, so evaluating doesn't change the training
-  stream. Train for up to 2000 episodes.
+  Give evaluation its own generator seeded with `SEED + 1` — created once before training starts and
+  reused across evaluations — so evaluating doesn't change the training stream. Train for up to 2000
+  episodes.
 
 The tests run this on every commit, so it should finish in a few seconds. This is the notebook's
 round-based "train, then test 100 episodes" loop, in miniature.
@@ -620,7 +621,8 @@ gradient with respect to `logp_new` is `-ratio * A / batch_size`. Elsewhere it's
 policy, the gradient of `log p(a)` with respect to the logits is `onehot(a) - p`.
 
 Command: `rl.py ppo-cartpole SEED`. Print `solved` when a greedy evaluation (argmax action, 10
-episodes, separate generator) averages a return of at least 475. Settings that work in a few seconds:
+episodes, separate generator and environment) averages a return of at least 475. Settings that work
+in a few seconds:
 actor `4,64,64,2` and critic `4,64,64,1`, both tanh. Scale the actor's last-layer weights by 0.01 and
 zero its bias, so the policy starts near uniform. Use n_steps 1024, 10 epochs, minibatch 64, Adam lr
 1e-3, gamma 0.99, lambda 0.95, clip 0.2, evaluate after every rollout, and a budget of 150 000 steps.
