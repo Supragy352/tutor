@@ -118,7 +118,21 @@ fn main() {
 fn read_challenge(dir: &Path) -> Result<Challenge, String> {
     let path = dir.join("challenge.toml");
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+    let c: Challenge = toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    if c.stages.is_empty() {
+        return Err(format!("{}: challenge has no stages", path.display()));
+    }
+    for (i, s) in c.stages.iter().enumerate() {
+        if s.tests.is_empty() {
+            return Err(format!(
+                "{}: stage {} ({}) has no tests",
+                path.display(),
+                i + 1,
+                s.name
+            ));
+        }
+    }
+    Ok(c)
 }
 
 fn load_progress_from(path: &Path) -> Result<Progress, String> {
@@ -1041,6 +1055,44 @@ mod tests {
             let (report, ok) = verify(&dir).unwrap();
             assert!(ok, "{}:\n{report}", dir.display());
         }
+    }
+
+    #[test]
+    fn read_challenge_rejects_empty_stages_and_empty_tests() {
+        let dir = env::temp_dir().join(format!(
+            "tutor_read_challenge_test_{}_{}",
+            std::process::id(),
+            TMP_SEQ.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&dir).unwrap();
+
+        fs::write(
+            dir.join("challenge.toml"),
+            "title = \"Empty\"\nstages = []\n",
+        )
+        .unwrap();
+        let err = read_challenge(&dir)
+            .err()
+            .expect("empty stages should be rejected");
+        assert!(
+            err.contains("no stages"),
+            "expected 'no stages' error, got: {err}"
+        );
+
+        fs::write(
+            dir.join("challenge.toml"),
+            "title = \"No tests\"\n\n[[stages]]\nname = \"Stage 1\"\ninstructions = \"do it\"\ntests = []\n",
+        )
+        .unwrap();
+        let err2 = read_challenge(&dir)
+            .err()
+            .expect("empty stage tests should be rejected");
+        assert!(
+            err2.contains("stage 1 (Stage 1) has no tests"),
+            "expected stage test validation error, got: {err2}"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

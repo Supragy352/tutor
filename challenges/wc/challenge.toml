@@ -9,6 +9,7 @@ A line is anything ending in a newline character.
 """
 tests = [
   { stdin = "a\nb\nc\n", expect = "3" },
+  { stdin = "a\nb\nc", expect = "2" },
   { stdin = "", expect = "0" },
 ]
 
@@ -21,6 +22,8 @@ Words are separated by any whitespace.
 tests = [
   { args = ["-w"], stdin = "hello world\nfoo\n", expect = "3" },
   { args = ["-w"], stdin = "  spaced   out  \n", expect = "2" },
+  { args = ["-w"], stdin = "", expect = "0" },
+  { args = ["-w"], stdin = "a\tb\n\nc", expect = "3" },
 ]
 
 [[stages]]

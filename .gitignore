@@ -1,3 +1,8 @@
 /target
 __pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+Thumbs.db
 tutor.toml
