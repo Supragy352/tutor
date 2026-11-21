@@ -259,7 +259,7 @@ def cmd_qlearn(args):
     seed = int(args[0])
     rng, eval_rng = Rng(seed), Rng(seed + 1)
     bins = [1, 1, 6, 12]
-    env = CartPole()
+    env, eval_env = CartPole(), CartPole()
     q = [[0.0, 0.0] for _ in range(1 * 1 * 6 * 12)]
     greedy = lambda obs: argmax(q[discretize(obs, bins)])
     for ep in range(1, 2001):
@@ -276,7 +276,7 @@ def cmd_qlearn(args):
             if term:
                 break
         if ep % 50 == 0:
-            score = evaluate(env, eval_rng, greedy, 10)
+            score = evaluate(eval_env, eval_rng, greedy, 10)
             print(f"episode {ep}: greedy average length {score:.1f}", file=sys.stderr)
             if score >= 475:
                 print("solved")
@@ -442,7 +442,7 @@ def cmd_td(args):
 def cmd_dqn(args):
     seed = int(args[0])
     rng, eval_rng = Rng(seed), Rng(seed + 1)
-    env = CartPole()
+    env, eval_env = CartPole(), CartPole()
     q = MLP(rng, [4, 64, 64, 2], "relu")
     target = MLP(rng, [4, 64, 64, 2], "relu")
     target.params = [p.copy() for p in q.params]
@@ -478,12 +478,11 @@ def cmd_dqn(args):
         if t % 500 == 0:
             target.params = [p.copy() for p in q.params]
         if t >= 1000 and t % 1000 == 0:
-            score = evaluate(env, eval_rng, greedy, 10)
+            score = evaluate(eval_env, eval_rng, greedy, 10)
             print(f"step {t}: greedy average length {score:.1f}", file=sys.stderr)
             if score >= 195:
                 print("solved")
                 return
-            obs, ep_len = env.reset(rng), 0
     print("not solved")
 
 
@@ -574,6 +573,7 @@ def cmd_ppo_loss(args):
 
 def ppo(seed, env, discrete, n_steps, epochs, minibatch, lr, gamma, lam, clip, budget, goal):
     rng, eval_rng = Rng(seed), Rng(seed + 1)
+    eval_env = type(env)()
     obs_dim, act_dim = (4, 2) if discrete else (3, 1)
     actor = MLP(rng, [obs_dim, 64, 64, act_dim], "tanh")
     critic = MLP(rng, [obs_dim, 64, 64, 1], "tanh")
@@ -656,12 +656,11 @@ def ppo(seed, env, discrete, n_steps, epochs, minibatch, lr, gamma, lam, clip, b
                 dv = (2 * 0.5 * (vpred - ret[idx]) / n)[:, None]  # vf_coef 0.5 * mse
                 g_critic = critic.backward(dv)
                 opt.step(g_actor + g_critic + g_logstd)
-        score = sum(run_episode(env, eval_rng, greedy)[1] for _ in range(10)) / 10
+        score = sum(run_episode(eval_env, eval_rng, greedy)[1] for _ in range(10)) / 10
         print(f"step {steps}: greedy average return {score:.1f}", file=sys.stderr)
         if score >= goal:
             print("solved")
             return
-        obs, ep_len = env.reset(rng), 0
     print("not solved")
 
 
