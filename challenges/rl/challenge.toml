@@ -348,18 +348,20 @@ the action actually taken. So the loss only looks at **one output per sample**: 
 `x_j`, output index `k_j` and target `t_j`, and its error is `d_j = y_j[k_j] - t_j`. The batch loss is
 the mean over samples of:
 
-- `mse`: `d²`, with gradient `2d`.
-- `huber` (smooth L1, which SB3's DQN uses): `0.5 d²` if `|d| < 1`, else `|d| - 0.5`. Its gradient
-  is `d` or `sign(d)`. It's quadratic near zero but grows only linearly, so one wildly wrong target
-  can't blow up the update.
+- `mse`: `d²`, with per-sample gradient `2d`.
+- `huber` (smooth L1, which SB3's DQN uses): `0.5 d²` if `|d| < 1`, else `|d| - 0.5`. Its per-sample
+  gradient is `d` or `sign(d)`. It's quadratic near zero but grows only linearly, so one wildly
+  wrong target can't blow up the update.
 
-Plain SGD then does `w = w - lr * gradient` for every parameter.
+Because the batch loss is the **mean** over the `N` samples in the batch, divide each sample's
+output-layer gradient `dz` by `N` before backpropagating (and leave the untouched action outputs at
+0). Plain SGD then does `w = w - lr * gradient` for every parameter.
 
 Command: `rl.py train SEED SIZES ACT LOSS OPT LR CLIP`. Build the network as in stage 11 and use OPT
 `sgd`. You'll handle CLIP in the next stage, and it is 0 here. Each stdin line is one batch, with
 samples separated by `|`, each written `x1 x2 ... ; k t`. For every batch, print the loss
 **before** updating, then take one optimiser step. After the last batch, print the network's new
-output for each sample input of that last batch.
+output for each sample input of that last batch, one sample per line.
 
 Check your gradients numerically if you're unsure. Nudge one weight by ±1e-6 and compare the slope
 of the loss with your gradient.
@@ -615,8 +617,9 @@ V(s). Repeat:
    Adam step on the clipped policy loss (stage 20, with normalised advantages) plus
    `0.5 * mean((V - returns)^2)` for the critic, with gradients clipped to a global norm of 0.5.
 
-The policy-gradient piece: for the samples where the unclipped term is the one `min` picks, the loss
-gradient with respect to `logp_new` is `-ratio * A / batch_size`. Elsewhere it's 0. For a softmax
+The policy-gradient piece: for samples where `ratio * A <= clip(ratio, 1 - CLIP, 1 + CLIP) * A`
+(including ties, such as `ratio == 1` on the first epoch), the loss gradient with respect to
+`logp_new` is `-ratio * A / batch_size`. Elsewhere it's 0. For a softmax
 policy, the gradient of `log p(a)` with respect to the logits is `onehot(a) - p`.
 
 Command: `rl.py ppo-cartpole SEED`. Print `solved` when a greedy evaluation (argmax action, 10

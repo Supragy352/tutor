@@ -184,7 +184,7 @@ def cmd_returns(args):
         print(fmts(reversed(out)))
 
 
-# ---------- stage 6: exploration ----------
+# ---------- stages 6-7: exploration ----------
 
 def linear_schedule(start, end, fraction, total, t):
     return start + (end - start) * min(1.0, t / (fraction * total))
@@ -214,7 +214,7 @@ def cmd_egreedy(args):
     print(" ".join(str(egreedy(rng, eps, floats(l))) for l in lines()))
 
 
-# ---------- stages 7-9: tabular Q-learning ----------
+# ---------- stages 8-10: tabular Q-learning ----------
 
 BOUNDS = [(-2.4, 2.4), (-3.0, 3.0), (-0.21, 0.21), (-3.5, 3.5)]
 
@@ -284,7 +284,7 @@ def cmd_qlearn(args):
     print("not solved")
 
 
-# ---------- stages 10-12: neural networks ----------
+# ---------- stages 11-13: neural networks ----------
 
 class MLP:
     def __init__(self, rng, sizes, act):
@@ -395,7 +395,7 @@ def cmd_train(args):
         print(fmts(net.forward(x)[0]))
 
 
-# ---------- stages 13-15: DQN ----------
+# ---------- stages 14-16: DQN ----------
 
 class Replay:
     def __init__(self, capacity):
@@ -487,13 +487,14 @@ def cmd_dqn(args):
     print("not solved")
 
 
-# ---------- stages 16-20: policy gradients ----------
+# ---------- stages 17-22: policy gradients ----------
 
-def softmax(logits):
+def softmax_and_log(logits):
     z = np.asarray(logits, dtype=float)
     z = z - z.max(axis=-1, keepdims=True)
     e = np.exp(z)
-    return e / e.sum(axis=-1, keepdims=True)
+    s = e.sum(axis=-1, keepdims=True)
+    return e / s, z - np.log(s)
 
 
 def sample_categorical(rng, probs):
@@ -509,9 +510,9 @@ def cmd_categorical(args):
     rng = Rng(int(args[0]))
     for l in lines():
         logits, a = l.split("|")
-        p = softmax(floats(logits))
-        logp = math.log(p[int(a)])
-        ent = -float((p * np.log(p)).sum())
+        p, log_p = softmax_and_log(floats(logits))
+        logp = float(log_p[int(a)])
+        ent = -float(np.where(p > 0, p * log_p, 0.0).sum())
         print(fmts(p), "|", fmt(logp), fmt(ent), "|", sample_categorical(rng, p))
 
 
@@ -586,9 +587,9 @@ def ppo(seed, env, discrete, n_steps, epochs, minibatch, lr, gamma, lam, clip, b
     def act(o):
         out = actor.forward(o)[0]
         if discrete:
-            p = softmax(out)
+            p, log_p = softmax_and_log(out)
             a = sample_categorical(rng, p)
-            return a, math.log(p[a])
+            return a, float(log_p[a])
         a = out + np.exp(log_std) * np.array([rng.normal() for _ in range(act_dim)])
         return a, float((-0.5 * ((a - out) / np.exp(log_std)) ** 2 - log_std - 0.5 * LOG2PI).sum())
 
@@ -633,8 +634,8 @@ def ppo(seed, env, discrete, n_steps, epochs, minibatch, lr, gamma, lam, clip, b
                 adv_b = (adv_b - adv_b.mean()) / (adv_b.std(ddof=1) + 1e-8)
                 out = actor.forward(o)
                 if discrete:
-                    p = softmax(out)
-                    logp = np.log(p[np.arange(n), A[idx]])
+                    p, log_p = softmax_and_log(out)
+                    logp = log_p[np.arange(n), A[idx]]
                 else:
                     std = np.exp(log_std)
                     z = (A[idx] - out) / std
@@ -673,7 +674,7 @@ def cmd_ppo_pendulum(args):
     ppo(int(args[0]), Pendulum(), False, 1024, 10, 64, 1e-3, 0.9, 0.95, 0.2, 300000, -250)
 
 
-# ---------- stages 21-22: hyperparameter search ----------
+# ---------- stages 23-24: hyperparameter search ----------
 
 def cmd_search(args):
     rng, n = Rng(int(args[0])), int(args[1])
